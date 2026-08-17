@@ -1,5 +1,6 @@
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
 import type { DshMinimalConfig } from "./config.ts";
+import { scanSessionPhase } from "./promotion.ts";
 
 export type ToolSurface = "off" | "bootstrap" | "promoted";
 
@@ -22,4 +23,21 @@ export interface AdapterState {
 	previousToolNames?: string[];
 	hasAssistant: boolean;
 	hasTool: boolean;
+}
+
+/**
+ * Restore anchored/assistant/tool flags from persisted session entries.
+ * The `dsh-anchored` custom entry persists in the session file, so a
+ * /resume'd session rebuilds the same status it had before shutdown.
+ */
+export function resyncSessionState(
+	state: Pick<AdapterState, "anchored" | "hasAssistant" | "hasTool">,
+	entries: readonly SessionEntry[],
+): void {
+	if (!state.anchored) {
+		state.anchored = entriesHaveAnchoredMarker(entries);
+	}
+	const scan = scanSessionPhase(entries);
+	state.hasAssistant ||= scan.hasAssistant;
+	state.hasTool ||= scan.hasTool;
 }

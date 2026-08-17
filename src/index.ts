@@ -3,19 +3,13 @@ import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
 import { reanchorPersona } from "./adapter/prompt.ts";
-import { scanSessionPhase } from "./adapter/promotion.ts";
-import { entriesHaveAnchoredMarker, type AdapterState } from "./adapter/state.ts";
+import { resyncSessionState, type AdapterState } from "./adapter/state.ts";
 import { MINIMAL_PROMPT } from "./dsh/official.ts";
 import { registerDshCommand } from "./settings/command.ts";
 import { registerStrReplaceEditorTool } from "./tools/str-replace-editor.ts";
 
 function refresh(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterState): boolean {
-	if (!state.anchored) {
-		state.anchored = entriesHaveAnchoredMarker(ctx.sessionManager.getEntries());
-	}
-	const scan = scanSessionPhase(ctx.sessionManager.getEntries());
-	state.hasAssistant ||= scan.hasAssistant;
-	state.hasTool ||= scan.hasTool;
+	resyncSessionState(state, ctx.sessionManager.getEntries());
 
 	const active = isAdapterActive(ctx, state.config);
 	syncSurface(pi, state, active, state.hasAssistant || state.hasTool);

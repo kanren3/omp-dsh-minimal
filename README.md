@@ -45,6 +45,17 @@ omp plugin install git:https://github.com/kanren3/omp-dsh-minimal.git
 /dsh off      disable the adapter
 ```
 
+Status reports the master switch plus whether this session has been anchored:
+
+```text
+dsh: on · session not anchored
+dsh: on · anchored, awaiting first reply
+dsh: on · anchored → promoted
+```
+
+The anchored state persists as a `dsh-anchored` custom entry in the session
+file, so `/dsh status` still reports it after `/resume`.
+
 ## Configuration
 
 `~/.omp/agent/omp-dsh-minimal.json` (override the base dir with `PI_CODING_AGENT_DIR`):

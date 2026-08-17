@@ -1,14 +1,20 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "../adapter/activation.ts";
 import { readDshMinimalConfig, writeDshMinimalConfig } from "../adapter/config.ts";
-import type { AdapterState } from "../adapter/state.ts";
+import { resyncSessionState, type AdapterState } from "../adapter/state.ts";
 
 const DSH_COMMAND_COMPLETIONS = ["on", "off", "status"] as const;
 const DSH_USAGE = "Usage: /dsh, /dsh status, /dsh on|off";
 
-/** Bare `/dsh` output: the master switch only, per the minimal contract. */
+/** Bare `/dsh` output: master switch plus whether this session was anchored. */
 export function formatDshStatus(state: AdapterState): string {
-	return `dsh: ${state.config.enabled ? "on" : "off"}`;
+	const bits = [`dsh: ${state.config.enabled ? "on" : "off"}`];
+	if (state.anchored) {
+		bits.push(state.hasAssistant || state.hasTool ? "anchored → promoted" : "anchored, awaiting first reply");
+	} else {
+		bits.push("session not anchored");
+	}
+	return bits.join(" · ");
 }
 
 export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, configPath?: string): void {
@@ -23,6 +29,7 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, config
 		},
 		handler: async (args, ctx) => {
 			state.config = readDshMinimalConfig(configPath);
+			resyncSessionState(state, ctx.sessionManager.getEntries());
 			const head = args.trim().toLowerCase();
 
 			if (head === "on" || head === "off") {
