@@ -1,4 +1,3 @@
-import { writeFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
@@ -8,11 +7,6 @@ import { resyncSessionState, type AdapterState } from "./adapter/state.ts";
 import { MINIMAL_PROMPT } from "./dsh/official.ts";
 import { registerDshCommand } from "./settings/command.ts";
 import { registerStrReplaceEditorTool } from "./tools/str-replace-editor.ts";
-
-function dumpPath(): string | undefined {
-	const value = process.env.OMP_DSH_MINIMAL_DUMP;
-	return value && value.length > 0 ? value : undefined;
-}
 
 function refresh(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterState): boolean {
 	resyncSessionState(state, ctx.sessionManager.getEntries());
@@ -77,25 +71,6 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		const persona = promoted ? reanchorPersona(assembled) : MINIMAL_PROMPT;
 		const rewritten = rewriteProviderRequest(event.payload, { persona, rewriteTools: !promoted });
 
-		const dump = dumpPath();
-		if (dump) {
-			try {
-				const surface = extractRequestSurface(rewritten);
-				writeFileSync(
-					dump,
-					`${JSON.stringify({
-						active,
-						promoted,
-						surface: state.surface,
-						...surface,
-					})}\n`,
-					{ encoding: "utf8", flag: "a" },
-				);
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.warn(`[omp-dsh-minimal] Failed to dump request surface: ${message}`);
-			}
-		}
 		return rewritten;
 	});
 }
