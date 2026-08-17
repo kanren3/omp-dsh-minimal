@@ -1,42 +1,39 @@
 # omp-dsh-minimal
 
-Minimal DeepSeek Harness (`dsh`) anchored-standard adapter for **Oh My Pi** (`omp`).
+This is the Minimal **DeepSeek Harness** anchored-standard adapter for **Oh My Pi**. On a DeepSeek V4 session, Request #1 exposes only the official two-tool catalog (`bash` and `str_replace_editor`) along with the official one-line persona. The first subsequent assistant reply or tool call then restores the session to Pi's full tool set and re-anchors the prompt.
 
-On a DeepSeek V4 session, request #1 exposes only the official two-tool catalog
-(`bash` + `str_replace_editor`) and the official one-line persona. The first
-assistant reply or tool call promotes the session back to Pi's full tool set and
-reanchors the prompt.
+## Request lifecycle
 
-## Target runtime
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant PI as Oh My Pi
+    participant A as Adapter
+    participant DS as DeepSeek
 
-- **Oh My Pi fork only** — imports `@oh-my-pi/pi-coding-agent`, manifest
-  `"omp"`, config dir `~/.omp/agent`.
-- **Not** the pi.dev `pi` CLI (that uses `@earendil-works/*` imports, a
-  typebox tool schema, and a `"pi"` manifest). For the pi.dev variant see the
-  reference repo `pi-dsh-minimal`.
-
-## Behavior
+    U->>PI: session_start
+    PI->>A: refresh()
+    A->>A: load config, reset state
+    U->>PI: first message
+    PI->>A: before_provider_request
+    A->>DS: MINIMAL_PROMPT + bash, str_replace_editor
+    DS-->>PI: first assistant reply / tool call
+    PI->>A: message_end / tool_call
+    A->>A: promoted = true
+    PI->>A: before_provider_request
+    A->>DS: reanchored persona + full Pi tool set
+    Note over A: session_compact starts a new bootstrap epoch
+```
 
 | Phase | Tools exposed | System prompt |
 | --- | --- | --- |
-| Bootstrap (request #1) | `bash`, `str_replace_editor` | `You are a helpful software engineer assistant.` |
-| Promoted (after first reply/tool call) | Pi's full active tool set | official one-liner + remaining Pi prompt (omp identity line dropped) |
-
-Promotion fires on either the first assistant message or the first tool result.
-Compaction starts a new bootstrap epoch.
+| Bootstrap (request #1) | bash, str_replace_editor | You are a helpful software engineer assistant. |
+| Promoted (after first reply/tool call) | Pi's full active tool set | official one-liner + remaining Pi prompt |
 
 ## Install
 
-From this directory:
-
 ```sh
-omp --extension ./src/index.ts
-```
-
-Or link it as a plugin:
-
-```sh
-omp plugin link .
+omp plugin install git:https://github.com/kanren3/omp-dsh-minimal.git
 ```
 
 ## Usage
@@ -48,12 +45,9 @@ omp plugin link .
 /dsh off      disable the adapter
 ```
 
-Status reports only `dsh: on` or `dsh: off`.
-
 ## Configuration
 
-`~/.omp/agent/omp-dsh-minimal.json` (override the base dir with
-`PI_CODING_AGENT_DIR`):
+`~/.omp/agent/omp-dsh-minimal.json` (override the base dir with `PI_CODING_AGENT_DIR`):
 
 ```json
 {
@@ -63,33 +57,8 @@ Status reports only `dsh: on` or `dsh: off`.
 ```
 
 - `enabled` — master switch (default `true`).
-- `modelPatterns` — substring match against `provider` / `id` / `name` after
-  normalization (lowercased, separators collapsed). Only matching models run
-  the adapter.
+- `modelPatterns` — substring match against `provider` / `id` / `name` after normalization (lowercased, separators collapsed). Only matching models run the adapter.
 
-A missing file is created with the defaults above; a missing or corrupt file
-falls back to the defaults. `/dsh on|off` rewrites this file.
+## References
 
-## Development
-
-```sh
-npm install
-npm run check   # tsc -p tsconfig.json && bun test tests/
-```
-
-Tests run under **bun** (not node/tsx): the `@oh-my-pi/*` packages are
-bun-only (they import `bun` built-ins). TypeScript is pinned to `^5.9.3`.
-
-## Layout
-
-```text
-src/
-  index.ts                    wiring: session/event hooks + promotion
-  dsh/official.ts             verbatim dsh literals + two-tool schemas
-  adapter/                    config, model matching, state, promotion,
-                              tool-set, prompt reanchoring, activation,
-                              wire payload rewrite
-  settings/command.ts         /dsh command
-  tools/str-replace-editor.ts the editor tool
-tests/                        node:test suites (run with bun)
-```
+- [pi-dsh-minimal](https://github.com/Averyyy/pi-dsh-minimal) — Pi adapter for official DeepSeek Harness minimal mode.

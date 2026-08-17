@@ -20,21 +20,17 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function normalizePatternList(value: unknown, fallback: string[]): string[] {
+export function normalizeModelPatterns(value: unknown): string[] {
 	if (typeof value === "string") {
 		const trimmed = value.trim();
-		return trimmed.length > 0 ? [trimmed] : [...fallback];
+		return trimmed.length > 0 ? [trimmed] : [...DEFAULT_MODEL_PATTERNS];
 	}
-	if (!Array.isArray(value)) return [...fallback];
+	if (!Array.isArray(value)) return [...DEFAULT_MODEL_PATTERNS];
 	const patterns = value
 		.filter((entry): entry is string => typeof entry === "string")
 		.map((entry) => entry.trim())
 		.filter((entry) => entry.length > 0);
-	return patterns.length > 0 ? [...new Set(patterns)] : [...fallback];
-}
-
-export function normalizeModelPatterns(value: unknown): string[] {
-	return normalizePatternList(value, DEFAULT_MODEL_PATTERNS);
+	return patterns.length > 0 ? [...new Set(patterns)] : [...DEFAULT_MODEL_PATTERNS];
 }
 
 export function getDshMinimalConfigPath(agentDir: string = getAgentDir()): string {
