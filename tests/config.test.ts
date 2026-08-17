@@ -21,8 +21,8 @@ test("normalizeModelPatterns drops empties, dedupes, and falls back to default",
 });
 
 test("read/write round-trips config", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-"));
-	const path = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-config-"));
+	const path = join(dir, "omp-dsh-minimal.json");
 	const written = writeDshMinimalConfig({ enabled: false, modelPatterns: ["gpt"] }, path);
 	assert.equal(written.ok, true);
 	assert.deepEqual(readDshMinimalConfig(path), { enabled: false, modelPatterns: ["gpt"] });
@@ -31,22 +31,22 @@ test("read/write round-trips config", () => {
 });
 
 test("missing file creates the default file and returns defaults", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-missing-"));
-	const path = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-config-missing-"));
+	const path = join(dir, "omp-dsh-minimal.json");
 	assert.deepEqual(readDshMinimalConfig(path), DEFAULT_DSH_MINIMAL_CONFIG);
 	assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), DEFAULT_DSH_MINIMAL_CONFIG);
 });
 
 test("corrupt JSON returns defaults", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-corrupt-"));
-	const path = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-config-corrupt-"));
+	const path = join(dir, "omp-dsh-minimal.json");
 	writeFileSync(path, "{not json");
 	assert.deepEqual(readDshMinimalConfig(path), DEFAULT_DSH_MINIMAL_CONFIG);
 });
 
 test("non-object and non-boolean enabled fall back to defaults", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-shape-"));
-	const path = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-config-shape-"));
+	const path = join(dir, "omp-dsh-minimal.json");
 	writeFileSync(path, JSON.stringify({ enabled: "yes", modelPatterns: ["x"] }));
 	assert.deepEqual(readDshMinimalConfig(path), {
 		enabled: DEFAULT_DSH_MINIMAL_CONFIG.enabled,
@@ -57,8 +57,8 @@ test("non-object and non-boolean enabled fall back to defaults", () => {
 });
 
 test("atomic write overwrites in place without leaving a temp file", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-atomic-"));
-	const path = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-config-atomic-"));
+	const path = join(dir, "omp-dsh-minimal.json");
 	writeDshMinimalConfig({ enabled: false, modelPatterns: ["a"] }, path);
 	writeDshMinimalConfig({ enabled: true, modelPatterns: ["b"] }, path);
 	assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { enabled: true, modelPatterns: ["b"] });
@@ -66,8 +66,8 @@ test("atomic write overwrites in place without leaving a temp file", () => {
 });
 
 test("a failed write preserves the previous config", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-fail-"));
-	const path = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-config-fail-"));
+	const path = join(dir, "omp-dsh-minimal.json");
 	writeDshMinimalConfig({ enabled: false, modelPatterns: ["keep"] }, path);
 	const result = writeDshMinimalConfig({ enabled: true, modelPatterns: ["new"] }, dir);
 	assert.equal(result.ok, false);

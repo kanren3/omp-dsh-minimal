@@ -59,8 +59,8 @@ test("formatDshStatus reports only on/off", () => {
 });
 
 test("handler on writes config and notifies dsh: on", async () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-cmd-on-"));
-	const configPath = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-on-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
 	const state = makeState();
 	const { pi, handler } = makePi();
 	const { ctx, notifications } = makeCtx();
@@ -71,8 +71,8 @@ test("handler on writes config and notifies dsh: on", async () => {
 });
 
 test("handler off writes config and notifies dsh: off", async () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-cmd-off-"));
-	const configPath = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-off-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
 	const state = makeState();
 	const { pi, handler } = makePi();
 	const { ctx, notifications } = makeCtx();
@@ -83,8 +83,8 @@ test("handler off writes config and notifies dsh: off", async () => {
 });
 
 test("bare and status notify status without writing", async () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-cmd-status-"));
-	const configPath = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-status-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
 	writeFileSync(configPath, `${JSON.stringify({ enabled: true, modelPatterns: ["deepseek-v4-pro"] })}\n`);
 	const before = readFileSync(configPath, "utf8");
 
@@ -100,8 +100,8 @@ test("bare and status notify status without writing", async () => {
 });
 
 test("unknown argument notifies the usage line", async () => {
-	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-cmd-usage-"));
-	const configPath = join(dir, "pi-dsh-minimal.json");
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-usage-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
 	const state = makeState();
 	const { pi, handler } = makePi();
 	const { ctx, notifications } = makeCtx();

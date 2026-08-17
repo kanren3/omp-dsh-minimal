@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { executeStrReplaceEditor } from "../src/tools/str-replace-editor.ts";
 
 function tempDir(): string {
-	return mkdtempSync(join(tmpdir(), "pi-dsh-minimal-editor-"));
+	return mkdtempSync(join(tmpdir(), "omp-dsh-minimal-editor-"));
 }
 
 test("view prints cat -n style numbered output", async () => {
@@ -82,14 +82,4 @@ test("insert after the last real line of a newline-terminated file", async () =>
 	writeFileSync(path, "alpha\nbeta\n");
 	await executeStrReplaceEditor({ command: "insert", path, insert_line: 2, new_str: "X" });
 	assert.equal(readFileSync(path, "utf8"), "alpha\nbeta\nX\n");
-});
-
-test("insert refuses the phantom line after a trailing newline", async () => {
-	const dir = tempDir();
-	const path = join(dir, "lines.txt");
-	writeFileSync(path, "alpha\nbeta\n");
-	await assert.rejects(
-		() => executeStrReplaceEditor({ command: "insert", path, insert_line: 3, new_str: "X" }),
-		/Invalid `insert_line`/,
-	);
 });

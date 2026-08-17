@@ -7,7 +7,7 @@ export interface DshMinimalConfig {
 	modelPatterns: string[];
 }
 
-export const DSH_MINIMAL_CONFIG_BASENAME = "pi-dsh-minimal.json";
+export const DSH_MINIMAL_CONFIG_BASENAME = "omp-dsh-minimal.json";
 
 export const DEFAULT_MODEL_PATTERNS = ["deepseek-v4-pro", "deepseek-v4-flash"];
 
@@ -56,7 +56,7 @@ export function readDshMinimalConfig(configPath: string = getDshMinimalConfigPat
 		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		console.warn(`[pi-dsh-minimal] Failed to read ${configPath}: ${message}`);
+		console.warn(`[omp-dsh-minimal] Failed to read ${configPath}: ${message}`);
 		return cloneConfig(DEFAULT_DSH_MINIMAL_CONFIG);
 	}
 }
@@ -80,7 +80,7 @@ export function writeDshMinimalConfig(
 			// best-effort cleanup; surface the original error instead
 		}
 		const message = error instanceof Error ? error.message : String(error);
-		console.warn(`[pi-dsh-minimal] Failed to write ${configPath}: ${message}`);
+		console.warn(`[omp-dsh-minimal] Failed to write ${configPath}: ${message}`);
 		return { ok: false, error: message };
 	}
 }

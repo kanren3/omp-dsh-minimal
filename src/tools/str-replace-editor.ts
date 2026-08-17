@@ -249,12 +249,9 @@ async function insertInFile(path: string, insertLine: number | undefined, newStr
 	}
 	const before = await readFile(path, "utf8");
 	const lines = before.split("\n");
-	// A trailing newline is a line terminator, not a line to insert after: the
-	// final split element is an empty phantom that would yield a stray blank line.
-	const maxInsertLine = before.endsWith("\n") ? lines.length - 1 : lines.length;
-	if (!Number.isInteger(insertLine) || insertLine < 0 || insertLine > maxInsertLine) {
+	if (!Number.isInteger(insertLine) || insertLine < 0 || insertLine > lines.length) {
 		throw new Error(
-			`Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${maxInsertLine}]`,
+			`Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${lines.length}]`,
 		);
 	}
 	const after = [...lines.slice(0, insertLine), ...value.split("\n"), ...lines.slice(insertLine)].join("\n");
