@@ -88,3 +88,11 @@ test("promoted -> off strips owned tools", () => {
 	assert.deepEqual(setToolsCalls, [["read", "bash", "edit", "write"]]);
 	assert.equal(state.surface, "off");
 });
+
+test("off -> promoted strips the auto-activated editor", () => {
+	const { pi, setToolsCalls } = makePi(["read", "bash", "edit", "write", "str_replace_editor"]);
+	const state = makeState({ anchored: true });
+	syncSurface(pi, state, true, true);
+	assert.deepEqual(setToolsCalls, [["read", "bash", "edit", "write"]]);
+	assert.equal(state.surface, "promoted");
+});

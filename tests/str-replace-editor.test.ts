@@ -75,3 +75,21 @@ test("directory view lists two levels and skips hidden/node_modules", async () =
 	assert.equal(text.includes(`\t${join(dir, "node_modules")}`), false);
 	assert.equal(text.includes(`\t${join(dir, ".secret")}`), false);
 });
+
+test("insert after the last real line of a newline-terminated file", async () => {
+	const dir = tempDir();
+	const path = join(dir, "lines.txt");
+	writeFileSync(path, "alpha\nbeta\n");
+	await executeStrReplaceEditor({ command: "insert", path, insert_line: 2, new_str: "X" });
+	assert.equal(readFileSync(path, "utf8"), "alpha\nbeta\nX\n");
+});
+
+test("insert refuses the phantom line after a trailing newline", async () => {
+	const dir = tempDir();
+	const path = join(dir, "lines.txt");
+	writeFileSync(path, "alpha\nbeta\n");
+	await assert.rejects(
+		() => executeStrReplaceEditor({ command: "insert", path, insert_line: 3, new_str: "X" }),
+		/Invalid `insert_line`/,
+	);
+});

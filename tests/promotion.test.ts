@@ -93,3 +93,34 @@ test("isPromoted is either-signal", () => {
 	assert.equal(isPromoted(false, true), true);
 	assert.equal(isPromoted(false, false), false);
 });
+
+function resetBoundary(id: string): SessionEntry {
+	return {
+		type: "reset_boundary",
+		id,
+		parentId: null,
+		timestamp: "2026-01-01T00:00:00.000Z",
+	} as SessionEntry;
+}
+
+function branchSummary(id: string): SessionEntry {
+	return {
+		type: "branch_summary",
+		id,
+		parentId: null,
+		timestamp: "2026-01-01T00:00:00.000Z",
+		fromId: "a1",
+		summary: "summarized",
+	} as SessionEntry;
+}
+
+test("/clear (reset_boundary) starts a new epoch", () => {
+	const scan = scanSessionPhase([user("u1", "old"), assistant("a1"), resetBoundary("r1"), user("u2", "continue")]);
+	assert.equal(scan.promoted, false);
+	assert.equal(scan.hasAssistant, false);
+});
+
+test("branch_summary does not cut the promotion window", () => {
+	const scan = scanSessionPhase([user("u1", "old"), assistant("a1"), branchSummary("b1"), user("u2", "continue")]);
+	assert.equal(scan.promoted, true);
+});

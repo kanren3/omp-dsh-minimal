@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -54,4 +54,23 @@ test("non-object and non-boolean enabled fall back to defaults", () => {
 	});
 	writeFileSync(path, JSON.stringify([1, 2, 3]));
 	assert.deepEqual(readDshMinimalConfig(path), DEFAULT_DSH_MINIMAL_CONFIG);
+});
+
+test("atomic write overwrites in place without leaving a temp file", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-atomic-"));
+	const path = join(dir, "pi-dsh-minimal.json");
+	writeDshMinimalConfig({ enabled: false, modelPatterns: ["a"] }, path);
+	writeDshMinimalConfig({ enabled: true, modelPatterns: ["b"] }, path);
+	assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { enabled: true, modelPatterns: ["b"] });
+	assert.equal(existsSync(`${path}.tmp`), false);
+});
+
+test("a failed write preserves the previous config", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-fail-"));
+	const path = join(dir, "pi-dsh-minimal.json");
+	writeDshMinimalConfig({ enabled: false, modelPatterns: ["keep"] }, path);
+	const result = writeDshMinimalConfig({ enabled: true, modelPatterns: ["new"] }, dir);
+	assert.equal(result.ok, false);
+	assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { enabled: false, modelPatterns: ["keep"] });
+	assert.equal(existsSync(`${dir}.tmp`), false);
 });

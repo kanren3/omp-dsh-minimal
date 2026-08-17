@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 
@@ -65,11 +65,20 @@ export function writeDshMinimalConfig(
 	config: DshMinimalConfig,
 	configPath: string = getDshMinimalConfigPath(),
 ): { ok: true } | { ok: false; error: string } {
+	// Write to a sibling temp file then rename: a crash mid-write can no longer
+	// leave a truncated config that the reader silently reverts to defaults.
+	const tmpPath = `${configPath}.tmp`;
 	try {
 		mkdirSync(dirname(configPath), { recursive: true });
-		writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+		writeFileSync(tmpPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+		renameSync(tmpPath, configPath);
 		return { ok: true };
 	} catch (error) {
+		try {
+			if (existsSync(tmpPath)) unlinkSync(tmpPath);
+		} catch {
+			// best-effort cleanup; surface the original error instead
+		}
 		const message = error instanceof Error ? error.message : String(error);
 		console.warn(`[pi-dsh-minimal] Failed to write ${configPath}: ${message}`);
 		return { ok: false, error: message };

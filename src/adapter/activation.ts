@@ -44,6 +44,11 @@ export function syncSurface(pi: ExtensionAPI, state: AdapterState, active: boole
 			state.previousToolNames && state.previousToolNames.length > 0 ? state.previousToolNames : DEFAULT_TOOL_NAMES;
 		pi.setActiveTools(restoreTools(previousToolNames, pi.getActiveTools()));
 		state.previousToolNames = undefined;
+	} else if (state.surface === "off") {
+		// off -> promoted: the session entered promoted without passing through
+		// bootstrap this run (e.g. resuming an already-promoted session). The
+		// harness auto-activates our bootstrap-only editor, so strip it.
+		pi.setActiveTools(stripOwnedTools(pi.getActiveTools()));
 	}
 
 	if (desired === "off") {

@@ -11,17 +11,18 @@ export function isPromoted(hasAssistant: boolean, hasTool: boolean): boolean {
 	return hasAssistant || hasTool;
 }
 
-/** Only entries after the last compaction count: compaction starts a new bootstrap epoch. */
+/** Entries after the last context boundary count: compaction and `/clear` each start a new bootstrap epoch. */
 export function scanSessionPhase(entries: readonly SessionEntry[]): PromotionScan {
-	let lastCompactionIndex = -1;
+	let lastBoundaryIndex = -1;
 	for (let index = 0; index < entries.length; index++) {
-		if (entries[index]?.type === "compaction") lastCompactionIndex = index;
+		const type = entries[index]?.type;
+		if (type === "compaction" || type === "reset_boundary") lastBoundaryIndex = index;
 	}
 
 	let hasAssistant = false;
 	let hasTool = false;
 
-	for (let index = lastCompactionIndex + 1; index < entries.length; index++) {
+	for (let index = lastBoundaryIndex + 1; index < entries.length; index++) {
 		const entry = entries[index];
 		if (!entry || entry.type !== "message") continue;
 		const role = entry.message?.role;
