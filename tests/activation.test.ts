@@ -56,24 +56,25 @@ test("desiredSurface maps active + promoted", () => {
 	assert.equal(desiredSurface(false, true), "off");
 });
 
-test("off -> bootstrap appends the marker and adds the editor without replacing the set", () => {
-	const { pi, setToolsCalls, appended } = makePi(["read", "bash", "edit", "write", "mcp__gdb_attach"]);
+test("off -> bootstrap adds both bash and str_replace_editor when missing", () => {
+	const { pi, setToolsCalls, appended } = makePi(["read", "write", "mcp__gdb_attach"]);
 	const state = makeState();
 	syncSurface(pi, state, true, false);
 	assert.equal(state.anchored, true);
 	assert.deepEqual(appended, [ANCHORED_ENTRY_TYPE]);
-	// The full set is preserved; only str_replace_editor is added.
-	assert.deepEqual(setToolsCalls, [["read", "bash", "edit", "write", "mcp__gdb_attach", "str_replace_editor"]]);
+	// Both bootstrap tools are added; the existing set is preserved.
+	assert.deepEqual(setToolsCalls, [["read", "write", "mcp__gdb_attach", "bash", "str_replace_editor"]]);
 	assert.equal(state.surface, "bootstrap");
 });
 
-test("bootstrap with editor already active does not call setActiveTools", () => {
+test("bootstrap with both preset tools already active does not call setActiveTools", () => {
 	const { pi, setToolsCalls } = makePi(["read", "bash", "str_replace_editor"]);
 	const state = makeState({ anchored: true, surface: "bootstrap" });
 	syncSurface(pi, state, true, false);
 	assert.deepEqual(setToolsCalls, []);
 	assert.equal(state.surface, "bootstrap");
 });
+
 
 test("bootstrap -> promoted strips the editor and preserves the rest", () => {
 	const { pi, setToolsCalls } = makePi(["read", "bash", "edit", "write", "mcp__gdb_attach", "str_replace_editor"]);

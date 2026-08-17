@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { DshMinimalConfig } from "./config.ts";
 import { contextModel, modelMatchesPatterns } from "./model.ts";
 import { ANCHORED_ENTRY_TYPE, type AdapterState, type ToolSurface } from "./state.ts";
-import { STR_REPLACE_EDITOR_TOOL_NAME, stripOwnedTools } from "./tool-set.ts";
+import { BOOTSTRAP_TOOL_NAMES, STR_REPLACE_EDITOR_TOOL_NAME, stripOwnedTools } from "./tool-set.ts";
 
 export function isAdapterActive(
 	ctx: { model?: { provider?: unknown; id?: unknown; name?: unknown } | null },
@@ -34,25 +34,19 @@ export function syncSurface(pi: ExtensionAPI, state: AdapterState, active: boole
 		return;
 	}
 
-	// Tool-set transitions never replace the active set wholesale. Replacing it
-	// via setActiveTools (→ setActiveToolsByName) recalculates the xd:// mount
-	// partition from the passed list, unmounting every discoverable/MCP tool
-	// not explicitly in the list. Instead, we only add or remove our owned
-	// str_replace_editor while passing through the full getActiveTools() list
-	// (which includes mounted names), so the harness preserves the partition.
-	// rewriteProviderRequest controls what the LLM actually sees at the payload
-	// level, so the harness's internal tool set can stay unchanged at bootstrap.
+	// Only add or remove adapter-owned tools rather than replacing the full set.
+	// setActiveToolsByName recalculates the xd:// mount partition from the passed
+	// list; passing the full active set (including mounted names) preserves it.
+	// rewriteProviderRequest controls what the LLM sees at the payload level.
 	if (desired === "bootstrap") {
-		// Entering bootstrap: ensure str_replace_editor is active alongside the
-		// existing set. rewriteProviderRequest filters the payload to just
-		// [bash, str_replace_editor], so the LLM never sees the extras.
+		// Ensure the minimal preset tools are active so direct tool calls dispatch.
 		const current = pi.getActiveTools();
-		if (!current.includes(STR_REPLACE_EDITOR_TOOL_NAME)) {
-			pi.setActiveTools([...current, STR_REPLACE_EDITOR_TOOL_NAME]);
+		const missing = BOOTSTRAP_TOOL_NAMES.filter((name) => !current.includes(name));
+		if (missing.length > 0) {
+			pi.setActiveTools([...current, ...missing]);
 		}
 	} else if (desired === "promoted") {
-		// Leaving bootstrap (→ promoted) or off → promoted: strip our editor.
-		// The rest of the set is untouched, so the xd:// partition survives.
+		// Strip our editor; the rest of the set is untouched.
 		pi.setActiveTools(stripOwnedTools(pi.getActiveTools()));
 	}
 
