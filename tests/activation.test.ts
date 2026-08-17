@@ -14,7 +14,6 @@ function makeState(overrides: Partial<AdapterState> = {}): AdapterState {
 		anchored: false,
 		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
 		surface: "off",
-		previousToolNames: undefined,
 		hasAssistant: false,
 		hasTool: false,
 		...overrides,
@@ -57,27 +56,33 @@ test("desiredSurface maps active + promoted", () => {
 	assert.equal(desiredSurface(false, true), "off");
 });
 
-test("off -> bootstrap snapshots tools, appends the marker, and sets the two-tool list", () => {
-	const { pi, setToolsCalls, appended } = makePi(["read", "bash", "edit", "write"]);
+test("off -> bootstrap appends the marker and adds the editor without replacing the set", () => {
+	const { pi, setToolsCalls, appended } = makePi(["read", "bash", "edit", "write", "mcp__gdb_attach"]);
 	const state = makeState();
 	syncSurface(pi, state, true, false);
 	assert.equal(state.anchored, true);
 	assert.deepEqual(appended, [ANCHORED_ENTRY_TYPE]);
-	assert.deepEqual(state.previousToolNames, ["read", "bash", "edit", "write"]);
-	assert.deepEqual(setToolsCalls, [["bash", "str_replace_editor"]]);
+	// The full set is preserved; only str_replace_editor is added.
+	assert.deepEqual(setToolsCalls, [["read", "bash", "edit", "write", "mcp__gdb_attach", "str_replace_editor"]]);
 	assert.equal(state.surface, "bootstrap");
 });
 
-test("bootstrap -> promoted restores the snapshot and strips the editor", () => {
-	const { pi, setToolsCalls } = makePi(["bash", "str_replace_editor"]);
+test("bootstrap with editor already active does not call setActiveTools", () => {
+	const { pi, setToolsCalls } = makePi(["read", "bash", "str_replace_editor"]);
+	const state = makeState({ anchored: true, surface: "bootstrap" });
+	syncSurface(pi, state, true, false);
+	assert.deepEqual(setToolsCalls, []);
+	assert.equal(state.surface, "bootstrap");
+});
+
+test("bootstrap -> promoted strips the editor and preserves the rest", () => {
+	const { pi, setToolsCalls } = makePi(["read", "bash", "edit", "write", "mcp__gdb_attach", "str_replace_editor"]);
 	const state = makeState({
 		anchored: true,
 		surface: "bootstrap",
-		previousToolNames: ["read", "bash", "edit", "write"],
 	});
 	syncSurface(pi, state, true, true);
-	assert.deepEqual(setToolsCalls, [["read", "bash", "edit", "write"]]);
-	assert.equal(state.previousToolNames, undefined);
+	assert.deepEqual(setToolsCalls, [["read", "bash", "edit", "write", "mcp__gdb_attach"]]);
 	assert.equal(state.surface, "promoted");
 });
 

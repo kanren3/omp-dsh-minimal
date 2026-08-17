@@ -13,7 +13,6 @@ function makeState(overrides: Partial<AdapterState> = {}): AdapterState {
 		anchored: false,
 		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
 		surface: "off",
-		previousToolNames: undefined,
 		hasAssistant: false,
 		hasTool: false,
 		...overrides,

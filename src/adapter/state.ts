@@ -20,7 +20,6 @@ export interface AdapterState {
 	anchored: boolean;
 	config: DshMinimalConfig;
 	surface: ToolSurface;
-	previousToolNames?: string[];
 	hasAssistant: boolean;
 	hasTool: boolean;
 }

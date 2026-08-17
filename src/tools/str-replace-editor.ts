@@ -290,6 +290,7 @@ export function registerStrReplaceEditorTool(pi: ExtensionAPI): void {
 		name: "str_replace_editor",
 		label: "str_replace_editor",
 		description: STR_REPLACE_EDITOR_DESCRIPTION,
+		loadMode: "essential",
 		parameters,
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const typed = parseEditorParams(params);
