@@ -1,0 +1,31 @@
+{
+  "name": "pi-dsh-minimal",
+  "version": "0.1.0",
+  "description": "Minimal DeepSeek Harness anchored-standard adapter for Oh My Pi",
+  "type": "module",
+  "omp": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test tests/",
+    "check": "npm run typecheck && npm run test"
+  },
+  "peerDependencies": {
+    "@oh-my-pi/pi-agent-core": "*",
+    "@oh-my-pi/pi-ai": "*",
+    "@oh-my-pi/pi-coding-agent": "*",
+    "@oh-my-pi/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@oh-my-pi/pi-agent-core": "*",
+    "@oh-my-pi/pi-ai": "*",
+    "@oh-my-pi/pi-coding-agent": "*",
+    "@oh-my-pi/pi-tui": "*",
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}
