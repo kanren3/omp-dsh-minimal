@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
-import { isPromoted, scanSessionPhase } from "../src/adapter/promotion.ts";
+import { isPromoted, latestBoundaryIndex, scanSessionPhase } from "../src/adapter/promotion.ts";
 
 function user(id: string, text: string): SessionEntry {
 	return {
@@ -123,4 +123,18 @@ test("/clear (reset_boundary) starts a new epoch", () => {
 test("branch_summary does not cut the promotion window", () => {
 	const scan = scanSessionPhase([user("u1", "old"), assistant("a1"), branchSummary("b1"), user("u2", "continue")]);
 	assert.equal(scan.promoted, true);
+});
+
+test("latestBoundaryIndex is -1 when no boundary exists", () => {
+	assert.equal(latestBoundaryIndex([]), -1);
+	assert.equal(latestBoundaryIndex([user("u1", "fix"), assistant("a1")]), -1);
+});
+
+test("latestBoundaryIndex returns the last compaction or reset boundary", () => {
+	assert.equal(latestBoundaryIndex([compact("c1"), resetBoundary("r1")]), 1);
+	assert.equal(latestBoundaryIndex([resetBoundary("r1"), compact("c2"), branchSummary("b1")]), 1);
+});
+
+test("latestBoundaryIndex ignores branch_summary entries", () => {
+	assert.equal(latestBoundaryIndex([branchSummary("b1"), assistant("a1")]), -1);
 });

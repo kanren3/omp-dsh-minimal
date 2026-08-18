@@ -15,6 +15,7 @@ function makeState(overrides: Partial<AdapterState> = {}): AdapterState {
 		surface: "off",
 		hasAssistant: false,
 		hasTool: false,
+		lastBoundaryIndex: -1,
 		...overrides,
 	};
 }
@@ -51,13 +52,20 @@ function anchoredEntry(): SessionEntry {
 	} as SessionEntry;
 }
 
-function makeCtx(entries: SessionEntry[] = []): {
+function makeCtx(
+	entries: SessionEntry[] = [],
+	model: { id?: string; name?: string; provider?: string } | null = {
+		id: "deepseek-v4-pro",
+		name: "DeepSeek V4 Pro",
+		provider: "opencode-go",
+	},
+): {
 	ctx: never;
 	notifications: Array<[string, string | undefined]>;
 } {
 	const notifications: Array<[string, string | undefined]> = [];
 	const ctx = {
-		model: { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", provider: "opencode-go" },
+		model,
 		sessionManager: { getEntries: () => entries },
 		ui: {
 			notify: (message: string, type?: string) => void notifications.push([message, type]),
@@ -68,23 +76,37 @@ function makeCtx(entries: SessionEntry[] = []): {
 
 test("formatDshStatus reports switch plus promotion status", () => {
 	assert.equal(
-		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } })),
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } }), true),
 		"dsh: on · awaiting promotion",
 	);
 	assert.equal(
-		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: false } })),
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: false } }), true),
 		"dsh: off",
 	);
 	assert.equal(
-		formatDshStatus(makeState({ anchored: true, hasAssistant: false, hasTool: false })),
-		"dsh: on · awaiting promotion",
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } }), false, {
+			id: "claude-sonnet",
+		}),
+		"dsh: on · current model not matched",
 	);
 	assert.equal(
-		formatDshStatus(makeState({ anchored: true, hasAssistant: true })),
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } }), false, null),
+		"dsh: on · no current model",
+	);
+	assert.equal(
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } }), false, {}),
+		"dsh: on · no current model",
+	);
+	assert.equal(
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } }), false, { id: 42 }),
+		"dsh: on · no current model",
+	);
+	assert.equal(
+		formatDshStatus(makeState({ hasAssistant: true }), true),
 		"dsh: on · promoted",
 	);
 	assert.equal(
-		formatDshStatus(makeState({ anchored: true, hasTool: true })),
+		formatDshStatus(makeState({ hasTool: true }), true),
 		"dsh: on · promoted",
 	);
 });
@@ -128,6 +150,60 @@ test("bare and status notify status without writing", async () => {
 		assert.deepEqual(notifications, [["dsh: on · awaiting promotion", "info"]]);
 		assert.equal(readFileSync(configPath, "utf8"), before);
 	}
+});
+
+test("status on a non-matching model reports enabled but inactive", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-model-mismatch-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
+	writeFileSync(configPath, `${JSON.stringify({ enabled: true, modelPatterns: ["deepseek-v4-pro"] })}\n`);
+	const state = makeState();
+	const { pi, handler, setToolsCalls, appended } = makePi();
+	const { ctx, notifications } = makeCtx([], { id: "claude-sonnet", name: "Claude", provider: "anthropic" });
+	registerDshCommand(pi, state, configPath);
+	await handler("status", ctx);
+	assert.deepEqual(notifications, [["dsh: on · current model not matched", "info"]]);
+	assert.deepEqual(setToolsCalls, []);
+	assert.deepEqual(appended, []);
+});
+
+test("handler on on a non-matching model writes config and reports inactive", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-on-mismatch-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
+	const state = makeState();
+	const { pi, handler, appended } = makePi();
+	const { ctx, notifications } = makeCtx([], { id: "claude-sonnet", name: "Claude", provider: "anthropic" });
+	registerDshCommand(pi, state, configPath);
+	await handler("on", ctx);
+	assert.equal((JSON.parse(readFileSync(configPath, "utf8")) as { enabled: boolean }).enabled, true);
+	assert.deepEqual(notifications, [["dsh: on · current model not matched", "info"]]);
+	assert.deepEqual(appended, []);
+});
+
+test("status with no current model reports enabled but inactive", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-no-model-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
+	writeFileSync(configPath, `${JSON.stringify({ enabled: true, modelPatterns: ["deepseek-v4-pro"] })}\n`);
+	const state = makeState();
+	const { pi, handler, setToolsCalls, appended } = makePi();
+	const { ctx, notifications } = makeCtx([], null);
+	registerDshCommand(pi, state, configPath);
+	await handler("status", ctx);
+	assert.deepEqual(notifications, [["dsh: on · no current model", "info"]]);
+	assert.deepEqual(setToolsCalls, []);
+	assert.deepEqual(appended, []);
+});
+
+test("handler on with no current model writes config and reports inactive", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-on-no-model-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
+	const state = makeState();
+	const { pi, handler, appended } = makePi();
+	const { ctx, notifications } = makeCtx([], null);
+	registerDshCommand(pi, state, configPath);
+	await handler("on", ctx);
+	assert.equal((JSON.parse(readFileSync(configPath, "utf8")) as { enabled: boolean }).enabled, true);
+	assert.deepEqual(notifications, [["dsh: on · no current model", "info"]]);
+	assert.deepEqual(appended, []);
 });
 
 test("status on a resumed session reads the persisted anchored marker", async () => {

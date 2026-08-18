@@ -23,13 +23,34 @@ function messageEntry(): SessionEntry {
 	} as SessionEntry;
 }
 
-function assistantEntry(): SessionEntry {
+function assistantEntry(id = "a1"): SessionEntry {
 	return {
 		type: "message",
-		id: "a1",
+		id,
 		parentId: null,
 		timestamp: "2026-01-01T00:00:00.000Z",
 		message: { role: "assistant", content: [{ type: "text", text: "done" }] },
+	} as SessionEntry;
+}
+
+function resetBoundaryEntry(id = "r1"): SessionEntry {
+	return {
+		type: "reset_boundary",
+		id,
+		parentId: null,
+		timestamp: "2026-01-01T00:00:00.000Z",
+	} as SessionEntry;
+}
+
+function compactionEntry(id = "c1"): SessionEntry {
+	return {
+		type: "compaction",
+		id,
+		parentId: null,
+		timestamp: "2026-01-01T00:00:00.000Z",
+		summary: "summary",
+		firstKeptEntryId: id,
+		tokensBefore: 100,
 	} as SessionEntry;
 }
 
@@ -42,17 +63,58 @@ test("entriesHaveAnchoredMarker detects the anchored custom entry", () => {
 });
 
 test("resyncSessionState restores anchored and assistant flags from entries", () => {
-	const state = { anchored: false, hasAssistant: false, hasTool: false };
+	const state = { anchored: false, hasAssistant: false, hasTool: false, lastBoundaryIndex: -1 };
 	resyncSessionState(state, [messageEntry(), customEntry(ANCHORED_ENTRY_TYPE), assistantEntry()]);
 	assert.equal(state.anchored, true);
 	assert.equal(state.hasAssistant, true);
 	assert.equal(state.hasTool, false);
+	assert.equal(state.lastBoundaryIndex, -1);
 });
 
-test("resyncSessionState OR-accumulates and never clears", () => {
-	const state = { anchored: true, hasAssistant: true, hasTool: false };
+test("resyncSessionState keeps live promotion flags when no new boundary appears", () => {
+	const state = { anchored: true, hasAssistant: true, hasTool: true, lastBoundaryIndex: -1 };
 	resyncSessionState(state, []);
-	assert.equal(state.anchored, true);
+	assert.equal(state.hasAssistant, true);
+	assert.equal(state.hasTool, true);
+	assert.equal(state.lastBoundaryIndex, -1);
+});
+
+test("resyncSessionState drops promotion flags after a new reset boundary", () => {
+	const state = { anchored: true, hasAssistant: true, hasTool: true, lastBoundaryIndex: -1 };
+	resyncSessionState(state, [assistantEntry(), resetBoundaryEntry()]);
+	assert.equal(state.hasAssistant, false);
+	assert.equal(state.hasTool, false);
+	assert.equal(state.lastBoundaryIndex, 1);
+});
+
+test("resyncSessionState drops promotion flags after a new compaction boundary", () => {
+	const state = { anchored: true, hasAssistant: true, hasTool: false, lastBoundaryIndex: -1 };
+	resyncSessionState(state, [assistantEntry(), compactionEntry()]);
+	assert.equal(state.hasAssistant, false);
+	assert.equal(state.hasTool, false);
+	assert.equal(state.lastBoundaryIndex, 1);
+});
+
+test("resyncSessionState drops promotion flags when the first boundary is at index 0", () => {
+	const state = { anchored: true, hasAssistant: true, hasTool: true, lastBoundaryIndex: -1 };
+	resyncSessionState(state, [resetBoundaryEntry()]);
+	assert.equal(state.hasAssistant, false);
+	assert.equal(state.hasTool, false);
+	assert.equal(state.lastBoundaryIndex, 0);
+});
+
+test("resyncSessionState folds only the newest boundary", () => {
+	const state = { anchored: true, hasAssistant: true, hasTool: false, lastBoundaryIndex: 0 };
+	resyncSessionState(state, [resetBoundaryEntry(), assistantEntry("a1"), resetBoundaryEntry("r2")]);
+	assert.equal(state.hasAssistant, false);
+	assert.equal(state.hasTool, false);
+	assert.equal(state.lastBoundaryIndex, 2);
+});
+
+test("resyncSessionState restores promotion flags from entries after the boundary", () => {
+	const state = { anchored: true, hasAssistant: false, hasTool: false, lastBoundaryIndex: 1 };
+	resyncSessionState(state, [assistantEntry(), resetBoundaryEntry(), assistantEntry("a2")]);
 	assert.equal(state.hasAssistant, true);
 	assert.equal(state.hasTool, false);
+	assert.equal(state.lastBoundaryIndex, 1);
 });

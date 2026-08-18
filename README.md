@@ -45,16 +45,17 @@ omp plugin install git:https://github.com/kanren3/omp-dsh-minimal.git
 /dsh off      disable the adapter
 ```
 
-Status reports the master switch plus promotion state:
+Status reports the master switch, current-model activation, and promotion state:
 
 ```text
 dsh: off
+dsh: on · no current model
+dsh: on · current model not matched
 dsh: on · awaiting promotion
 dsh: on · promoted
 ```
 
-The anchored state persists as a `dsh-anchored` custom entry in the session
-file, so `/dsh status` still reports it after `/resume`.
+On `/resume`, promotion state is rebuilt from the persisted session entries.
 
 ## Configuration
 

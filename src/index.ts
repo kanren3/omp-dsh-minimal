@@ -23,6 +23,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		surface: "off",
 		hasAssistant: false,
 		hasTool: false,
+		lastBoundaryIndex: -1,
 	};
 
 	registerStrReplaceEditorTool(pi);
@@ -34,6 +35,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		state.surface = "off";
 		state.hasAssistant = false;
 		state.hasTool = false;
+		state.lastBoundaryIndex = -1;
 		refresh(pi, ctx, state);
 	});
 
@@ -46,6 +48,7 @@ pi.on("session_switch", async (_event, ctx) => {
 	state.surface = "off";
 	state.hasAssistant = false;
 	state.hasTool = false;
+	state.lastBoundaryIndex = -1;
 	refresh(pi, ctx, state);
 });
 

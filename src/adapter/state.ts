@@ -1,6 +1,6 @@
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
 import type { DshMinimalConfig } from "./config.ts";
-import { scanSessionPhase } from "./promotion.ts";
+import { latestBoundaryIndex, scanSessionPhase } from "./promotion.ts";
 
 export type ToolSurface = "off" | "bootstrap" | "promoted";
 
@@ -18,16 +18,28 @@ export interface AdapterState {
 	surface: ToolSurface;
 	hasAssistant: boolean;
 	hasTool: boolean;
+	/** Index of the newest compaction/reset boundary already folded into the promotion flags. */
+	lastBoundaryIndex: number;
 }
 
-/** Restore anchored/assistant/tool flags from persisted session entries. */
+/**
+ * Restore anchored/assistant/tool flags from persisted session entries.
+ * Promotion flags from before a newly observed compaction or `/clear` boundary
+ * are dropped first, so an old epoch cannot promote the next request.
+ */
 export function resyncSessionState(
-	state: Pick<AdapterState, "anchored" | "hasAssistant" | "hasTool">,
+	state: Pick<AdapterState, "anchored" | "hasAssistant" | "hasTool" | "lastBoundaryIndex">,
 	entries: readonly SessionEntry[],
 ): void {
 	if (!state.anchored) {
 		state.anchored = entriesHaveAnchoredMarker(entries);
 	}
+	const boundaryIndex = latestBoundaryIndex(entries);
+	if (boundaryIndex > state.lastBoundaryIndex) {
+		state.hasAssistant = false;
+		state.hasTool = false;
+	}
+	state.lastBoundaryIndex = boundaryIndex;
 	const scan = scanSessionPhase(entries);
 	state.hasAssistant ||= scan.hasAssistant;
 	state.hasTool ||= scan.hasTool;

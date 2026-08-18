@@ -11,13 +11,19 @@ export function isPromoted(hasAssistant: boolean, hasTool: boolean): boolean {
 	return hasAssistant || hasTool;
 }
 
-/** Entries after the last context boundary count: compaction and `/clear` each start a new bootstrap epoch. */
-export function scanSessionPhase(entries: readonly SessionEntry[]): PromotionScan {
-	let lastBoundaryIndex = -1;
+/** Index of the latest compaction or reset_boundary entry, or -1 when none. */
+export function latestBoundaryIndex(entries: readonly SessionEntry[]): number {
+	let latest = -1;
 	for (let index = 0; index < entries.length; index++) {
 		const type = entries[index]?.type;
-		if (type === "compaction" || type === "reset_boundary") lastBoundaryIndex = index;
+		if (type === "compaction" || type === "reset_boundary") latest = index;
 	}
+	return latest;
+}
+
+/** Entries after the last context boundary count: compaction and `/clear` each start a new bootstrap epoch. */
+export function scanSessionPhase(entries: readonly SessionEntry[]): PromotionScan {
+	const lastBoundaryIndex = latestBoundaryIndex(entries);
 
 	let hasAssistant = false;
 	let hasTool = false;
@@ -31,7 +37,7 @@ export function scanSessionPhase(entries: readonly SessionEntry[]): PromotionSca
 			const content = entry.message.content;
 			if (
 				Array.isArray(content) &&
-				content.some((part) => part && typeof part === "object" && (part as { type?: string }).type === "toolCall")
+				content.some((part) => part !== null && typeof part === "object" && "type" in part && part.type === "toolCall")
 			) {
 				hasTool = true;
 			}

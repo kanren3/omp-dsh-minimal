@@ -16,6 +16,7 @@ function makeState(overrides: Partial<AdapterState> = {}): AdapterState {
 		surface: "off",
 		hasAssistant: false,
 		hasTool: false,
+		lastBoundaryIndex: -1,
 		...overrides,
 	};
 }
