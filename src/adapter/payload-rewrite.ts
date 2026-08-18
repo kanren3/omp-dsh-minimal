@@ -25,6 +25,7 @@ function exactAnthropicTools(): Record<string, unknown>[] {
 
 function exactNamedParameterTools(): Record<string, unknown>[] {
 	return DSH_MINIMAL_TOOLS.map((tool) => ({
+		type: "function",
 		name: tool.name,
 		description: tool.description,
 		parameters: structuredClone(tool.parameters),

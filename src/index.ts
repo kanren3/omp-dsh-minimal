@@ -37,6 +37,17 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		refresh(pi, ctx, state);
 	});
 
+// /new, /resume, /fork, and session switches fire session_switch (not
+// session_start), so reset here too to avoid showing the previous session's state.
+pi.on("session_switch", async (_event, ctx) => {
+	state.anchored = false;
+	state.config = readDshMinimalConfig();
+	state.surface = "off";
+	state.hasAssistant = false;
+	state.hasTool = false;
+	refresh(pi, ctx, state);
+});
+
 	pi.on("session_compact", async (_event, ctx) => {
 		state.hasAssistant = false;
 		state.hasTool = false;
