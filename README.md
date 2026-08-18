@@ -45,12 +45,12 @@ omp plugin install git:https://github.com/kanren3/omp-dsh-minimal.git
 /dsh off      disable the adapter
 ```
 
-Status reports the master switch plus whether this session has been anchored:
+Status reports the master switch plus promotion state:
 
 ```text
-dsh: on · session not anchored
-dsh: on · anchored, awaiting first reply
-dsh: on · anchored → promoted
+dsh: off
+dsh: on · awaiting promotion
+dsh: on · promoted
 ```
 
 The anchored state persists as a `dsh-anchored` custom entry in the session

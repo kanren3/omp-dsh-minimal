@@ -66,26 +66,26 @@ function makeCtx(entries: SessionEntry[] = []): {
 	return { ctx: ctx as never, notifications };
 }
 
-test("formatDshStatus reports switch plus anchored state", () => {
+test("formatDshStatus reports switch plus promotion status", () => {
 	assert.equal(
 		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: true } })),
-		"dsh: on · session not anchored",
+		"dsh: on · awaiting promotion",
 	);
 	assert.equal(
 		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: false } })),
-		"dsh: off · session not anchored",
+		"dsh: off",
 	);
 	assert.equal(
 		formatDshStatus(makeState({ anchored: true, hasAssistant: false, hasTool: false })),
-		"dsh: on · anchored, awaiting first reply",
+		"dsh: on · awaiting promotion",
 	);
 	assert.equal(
 		formatDshStatus(makeState({ anchored: true, hasAssistant: true })),
-		"dsh: on · anchored → promoted",
+		"dsh: on · promoted",
 	);
 	assert.equal(
 		formatDshStatus(makeState({ anchored: true, hasTool: true })),
-		"dsh: on · anchored → promoted",
+		"dsh: on · promoted",
 	);
 });
 
@@ -98,7 +98,7 @@ test("handler on writes config and notifies anchored awaiting", async () => {
 	registerDshCommand(pi, state, configPath);
 	await handler("on", ctx);
 	assert.equal((JSON.parse(readFileSync(configPath, "utf8")) as { enabled: boolean }).enabled, true);
-	assert.deepEqual(notifications, [["dsh: on · anchored, awaiting first reply", "info"]]);
+	assert.deepEqual(notifications, [["dsh: on · awaiting promotion", "info"]]);
 });
 
 test("handler off writes config and notifies dsh: off", async () => {
@@ -110,7 +110,7 @@ test("handler off writes config and notifies dsh: off", async () => {
 	registerDshCommand(pi, state, configPath);
 	await handler("off", ctx);
 	assert.equal((JSON.parse(readFileSync(configPath, "utf8")) as { enabled: boolean }).enabled, false);
-	assert.deepEqual(notifications, [["dsh: off · session not anchored", "info"]]);
+	assert.deepEqual(notifications, [["dsh: off", "info"]]);
 });
 
 test("bare and status notify status without writing", async () => {
@@ -125,7 +125,7 @@ test("bare and status notify status without writing", async () => {
 		const { ctx, notifications } = makeCtx();
 		registerDshCommand(pi, state, configPath);
 		await handler(args, ctx);
-		assert.deepEqual(notifications, [["dsh: on · session not anchored", "info"]]);
+		assert.deepEqual(notifications, [["dsh: on · awaiting promotion", "info"]]);
 		assert.equal(readFileSync(configPath, "utf8"), before);
 	}
 });
@@ -140,7 +140,7 @@ test("status on a resumed session reads the persisted anchored marker", async ()
 	registerDshCommand(pi, state, configPath);
 	await handler("status", ctx);
 	assert.equal(state.anchored, true);
-	assert.deepEqual(notifications, [["dsh: on · anchored, awaiting first reply", "info"]]);
+	assert.deepEqual(notifications, [["dsh: on · awaiting promotion", "info"]]);
 });
 
 test("unknown argument notifies the usage line", async () => {
