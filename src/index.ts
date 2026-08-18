@@ -38,7 +38,8 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 	});
 
 // /new, /resume, /fork, and session switches fire session_switch (not
-// session_start), so reset here too to avoid showing the previous session's state.
+// session_start). Reset unconditionally; resyncSessionState restores
+// anchored from the new session's entries when a marker persists.
 pi.on("session_switch", async (_event, ctx) => {
 	state.anchored = false;
 	state.config = readDshMinimalConfig();

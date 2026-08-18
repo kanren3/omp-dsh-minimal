@@ -4,11 +4,7 @@ import { scanSessionPhase } from "./promotion.ts";
 
 export type ToolSurface = "off" | "bootstrap" | "promoted";
 
-/**
- * Custom session entry written once when bootstrap engages. It persists in
- * the session file (custom entries never reach the LLM), so a /resume'd
- * session can still report/restore whether request #1 was anchored.
- */
+/** Custom entry written once when bootstrap engages. Persists in the session file. */
 export const ANCHORED_ENTRY_TYPE = "dsh-anchored";
 
 export function entriesHaveAnchoredMarker(entries: readonly SessionEntry[]): boolean {
@@ -24,11 +20,7 @@ export interface AdapterState {
 	hasTool: boolean;
 }
 
-/**
- * Restore anchored/assistant/tool flags from persisted session entries.
- * The `dsh-anchored` custom entry persists in the session file, so a
- * /resume'd session rebuilds the same status it had before shutdown.
- */
+/** Restore anchored/assistant/tool flags from persisted session entries. */
 export function resyncSessionState(
 	state: Pick<AdapterState, "anchored" | "hasAssistant" | "hasTool">,
 	entries: readonly SessionEntry[],
