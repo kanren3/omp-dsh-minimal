@@ -51,29 +51,11 @@ Status reports the master switch, current-model activation, and promotion state:
 dsh: off
 dsh: on · no current model
 dsh: on · current model not matched
-dsh: on · awaiting promotion · spec
-dsh: on · promoted · spec
-dsh: on · released (react)
-dsh: on · released (weak)
+dsh: on · awaiting promotion
+dsh: on · promoted
 ```
 
 On `/resume`, promotion state is rebuilt from the persisted session entries.
-
-## Task classification
-
-Before the first provider request, the adapter classifies the session's
-first user message into one of the two stable behavior bands (keyword
-counts, same classifier as dsh-router-standard):
-
-- **spec** (fix / debug / refactor / review / …) — bootstrap engages:
-  request #1 goes minimal, then promotes to the full Pi surface.
-- **react** (build / create / develop / new project / …) or **weak**
-  (ambiguous) — the session is **released**: no bootstrap, the native Pi
-  prompt and full tool catalog pass through untouched from request #1.
-
-The classification is locked at the first request (path commitment) and
-survives compaction; `/clear` and `/compact` re-bootstrap a spec session
-only.
 
 ## Configuration
 

@@ -15,6 +15,7 @@ function makeState(overrides: Partial<AdapterState> = {}): AdapterState {
 		surface: "off",
 		hasAssistant: false,
 		hasTool: false,
+		pendingPreludes: [],
 		lastBoundaryIndex: -1,
 		...overrides,
 	};
@@ -108,25 +109,6 @@ test("formatDshStatus reports switch plus promotion status", () => {
 	assert.equal(
 		formatDshStatus(makeState({ hasTool: true }), true),
 		"dsh: on · promoted",
-	);
-});
-
-test("formatDshStatus reports classification and release", () => {
-	assert.equal(
-		formatDshStatus(makeState({ classification: "spec" }), true),
-		"dsh: on · awaiting promotion · spec",
-	);
-	assert.equal(
-		formatDshStatus(makeState({ classification: "spec", hasAssistant: true }), true),
-		"dsh: on · promoted · spec",
-	);
-	assert.equal(
-		formatDshStatus(makeState({ classification: "react" }), true),
-		"dsh: on · released (react)",
-	);
-	assert.equal(
-		formatDshStatus(makeState({ classification: "weak" }), true),
-		"dsh: on · released (weak)",
 	);
 });
 

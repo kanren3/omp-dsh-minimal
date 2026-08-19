@@ -1,13 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
-import { classifyTask, extractFirstUserText } from "./adapter/classify.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
-import { filterBootstrapPreludes } from "./adapter/context-filter.ts";
-import {
-	extractRequestSurface,
-	isNonAgentProviderPayload,
-	rewriteProviderRequest,
-} from "./adapter/payload-rewrite.ts";
+import { partitionBootstrapPreludes } from "./adapter/context-filter.ts";
+import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
 import { reanchorPersona } from "./adapter/prompt.ts";
 import { isAdapterPromoted, resyncSessionState, type AdapterState } from "./adapter/state.ts";
 import { MINIMAL_PROMPT } from "./dsh/official.ts";
@@ -29,7 +24,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		surface: "off",
 		hasAssistant: false,
 		hasTool: false,
-		classification: undefined,
+		pendingPreludes: [],
 		lastBoundaryIndex: -1,
 	};
 
@@ -42,7 +37,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		state.surface = "off";
 		state.hasAssistant = false;
 		state.hasTool = false;
-		state.classification = undefined;
+		state.pendingPreludes = [];
 		state.lastBoundaryIndex = -1;
 		refresh(pi, ctx, state);
 	});
@@ -56,7 +51,7 @@ pi.on("session_switch", async (_event, ctx) => {
 	state.surface = "off";
 	state.hasAssistant = false;
 	state.hasTool = false;
-	state.classification = undefined;
+	state.pendingPreludes = [];
 	state.lastBoundaryIndex = -1;
 	refresh(pi, ctx, state);
 });
@@ -87,12 +82,30 @@ pi.on("session_switch", async (_event, ctx) => {
 	});
 
 	// AgentMessage layer, before wire encoding: customType is still intact
-	// here, so the prelude filter matches by type instead of content
+	// here, so the prelude partition matches by type instead of content
 	// fingerprint (which would drift when omp rewords its prompt templates).
 	pi.on("context", async (event, ctx) => {
 		resyncSessionState(state, ctx.sessionManager.getEntries());
 		const promoted = isAdapterPromoted(state);
-		const messages = filterBootstrapPreludes(event.messages, promoted);
+		let messages = event.messages;
+
+		if (promoted) {
+			if (state.pendingPreludes.length > 0) {
+				// omp builds eager preludes only for the first user message;
+				// bootstrap dropped them, so re-inject near-field once the
+				// full tool set is back — otherwise the model never sees the
+				// todo/task guidance again this session.
+				messages = [...messages, ...state.pendingPreludes];
+				state.pendingPreludes = [];
+			}
+		} else {
+			const { kept, dropped } = partitionBootstrapPreludes(messages);
+			if (dropped.length > 0) {
+				state.pendingPreludes = dropped;
+				messages = kept;
+			}
+		}
+
 		if (messages === event.messages) return undefined;
 		return { messages };
 	});
@@ -101,27 +114,10 @@ pi.on("session_switch", async (_event, ctx) => {
 		const active = refresh(pi, ctx, state);
 		if (!active) return undefined;
 
-		const payload = event.payload;
-		if (isNonAgentProviderPayload(payload)) return undefined;
-
-		// Released sessions stay native forever: classification is locked at
-		// the first agent request and never re-run (path commitment).
-		if (state.classification !== undefined && state.classification !== "spec") return undefined;
-
-		if (state.classification === undefined) {
-			state.classification = classifyTask(extractFirstUserText(payload));
-			if (state.classification !== "spec") {
-				// React/weak task: do not anchor. Restore the full tool surface
-				// and pass this first request through untouched.
-				refresh(pi, ctx, state);
-				return undefined;
-			}
-		}
-
-		const assembled = extractRequestSurface(payload).system ?? ctx.getSystemPrompt().join("\n");
+		const assembled = extractRequestSurface(event.payload).system ?? ctx.getSystemPrompt().join("\n");
 		const promoted = isAdapterPromoted(state);
 		const persona = promoted ? reanchorPersona(assembled) : MINIMAL_PROMPT;
-		const rewritten = rewriteProviderRequest(payload, { persona, rewriteTools: !promoted });
+		const rewritten = rewriteProviderRequest(event.payload, { persona, rewriteTools: !promoted });
 
 		return rewritten;
 	});

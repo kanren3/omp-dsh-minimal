@@ -21,13 +21,7 @@ export function formatDshStatus(
 		return hasModel ? "dsh: on · current model not matched" : "dsh: on · no current model";
 	}
 	const promoted = isAdapterPromoted(state);
-	if (state.classification === undefined) {
-		return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}`;
-	}
-	if (state.classification === "spec") {
-		return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"} · spec`;
-	}
-	return `dsh: on · released (${state.classification})`;
+	return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}`;
 }
 
 export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, configPath?: string): void {

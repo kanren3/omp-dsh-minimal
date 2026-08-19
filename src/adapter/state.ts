@@ -1,5 +1,5 @@
+import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
-import type { TaskClassification } from "./classify.ts";
 import type { DshMinimalConfig } from "./config.ts";
 import { latestBoundaryIndex, scanSessionPhase } from "./promotion.ts";
 
@@ -20,22 +20,23 @@ export interface AdapterState {
 	hasAssistant: boolean;
 	hasTool: boolean;
 	/**
-	 * First-turn task classification, locked at the first agent request.
-	 * Non-spec tasks release the session: no bootstrap, native omp surface.
+	 * Bootstrap preludes (todo/task guidance) filtered out of the first
+	 * request, re-injected near-field once the session is promoted. omp
+	 * builds them only for the first user message and never rebuilds them.
 	 */
-	classification?: TaskClassification;
+	pendingPreludes: AgentMessage[];
 	/** Index of the newest compaction/reset boundary already folded into the promotion flags. */
 	lastBoundaryIndex: number;
 }
 
 /**
- * Promoted when the assistant replied, called a tool, or the first-turn
- * classification released the session (react/weak tasks skip bootstrap).
+ * Promoted when the assistant replied or called a tool. Compaction and
+ * `/clear` each start a new bootstrap epoch (flags reset by resync).
  */
 export function isAdapterPromoted(
-	state: Pick<AdapterState, "hasAssistant" | "hasTool" | "classification">,
+	state: Pick<AdapterState, "hasAssistant" | "hasTool">,
 ): boolean {
-	return state.hasAssistant || state.hasTool || (state.classification !== undefined && state.classification !== "spec");
+	return state.hasAssistant || state.hasTool;
 }
 
 /**

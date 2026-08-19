@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { filterBootstrapPreludes } from "../src/adapter/context-filter.ts";
+import { partitionBootstrapPreludes } from "../src/adapter/context-filter.ts";
 
 function customMessage(customType: string): AgentMessage {
 	return {
@@ -22,24 +22,29 @@ const userMessage: AgentMessage = {
 	timestamp: Date.now(),
 };
 
-test("bootstrap drops both injected preludes by customType", () => {
-	const filtered = filterBootstrapPreludes([userMessage, todoPrelude, taskPrelude, otherCustom], false);
-	assert.deepEqual(filtered, [userMessage, otherCustom]);
+test("partition splits both injected preludes by customType", () => {
+	const { kept, dropped } = partitionBootstrapPreludes([userMessage, todoPrelude, taskPrelude, otherCustom]);
+	assert.deepEqual(kept, [userMessage, otherCustom]);
+	assert.deepEqual(dropped, [todoPrelude, taskPrelude]);
 });
 
-test("bootstrap keeps non-prelude custom messages and user turns", () => {
-	const filtered = filterBootstrapPreludes([userMessage, otherCustom], false);
-	assert.deepEqual(filtered, [userMessage, otherCustom]);
-});
-
-test("promoted keeps the preludes for the full tool set", () => {
-	const messages = [userMessage, todoPrelude, taskPrelude];
-	const filtered = filterBootstrapPreludes(messages, true);
-	assert.deepEqual(filtered, messages);
-});
-
-test("no change returns the original array reference", () => {
+test("partition keeps non-prelude custom messages and user turns", () => {
 	const messages = [userMessage, otherCustom];
-	assert.equal(filterBootstrapPreludes(messages, false), messages);
-	assert.equal(filterBootstrapPreludes(messages, true), messages);
+	const { kept, dropped } = partitionBootstrapPreludes(messages);
+	assert.deepEqual(kept, messages);
+	assert.deepEqual(dropped, []);
+});
+
+test("partition without preludes returns no dropped", () => {
+	const messages = [userMessage];
+	const { kept, dropped } = partitionBootstrapPreludes(messages);
+	assert.deepEqual(kept, messages);
+	assert.deepEqual(dropped, []);
+});
+
+test("partition keeps arbitrary custom messages intact", () => {
+	const messages = [userMessage, otherCustom, todoPrelude];
+	const { kept, dropped } = partitionBootstrapPreludes(messages);
+	assert.deepEqual(kept, [userMessage, otherCustom]);
+	assert.deepEqual(dropped, [todoPrelude]);
 });
