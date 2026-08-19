@@ -36,6 +36,11 @@ sequenceDiagram
 omp plugin install git:https://github.com/kanren3/omp-dsh-minimal.git
 ```
 
+The plugin declares **no** `peerDependencies`: `@oh-my-pi/*` imports are
+remapped by the host loader onto omp's own bundled packages at runtime, so
+installing pulls only the plugin source — no dependency tree. The same
+packages stay in `devDependencies` for local typechecking and tests.
+
 ## Usage
 
 ```text
