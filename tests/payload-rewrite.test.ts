@@ -12,6 +12,22 @@ import {
 const rewriteMinimalProviderRequest = (payload: unknown) =>
 	rewriteProviderRequest(payload, { persona: MINIMAL_PROMPT, rewriteTools: true });
 
+test("rewrites the payload in place so hosts ignoring the hook return value still see it", () => {
+	const payload = {
+		system: "Pi default prompt",
+		messages: [{ role: "system", content: "Pi default prompt" }],
+		tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
+	};
+	const returned = rewriteMinimalProviderRequest(payload);
+	// openai-completions calls onPayload without consuming the return value;
+	// the mutation alone must deliver the rewrite.
+	assert.equal(returned, payload);
+	const surface = extractRequestSurface(payload);
+	assert.equal(surface.system, MINIMAL_PROMPT);
+	assert.deepEqual(surface.toolNames, ["bash", "str_replace_editor"]);
+	assert.equal((payload.messages[0] as { content: string }).content, MINIMAL_PROMPT);
+});
+
 test("rewriteMinimalProviderRequest replaces chat-completions tools and system message", () => {
 	const rewritten = rewriteMinimalProviderRequest({
 		model: "deepseek-v4-pro",

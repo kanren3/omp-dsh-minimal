@@ -50,25 +50,31 @@ function rewriteTools(tools: unknown): unknown {
 	return exactChatCompletionsTools();
 }
 
+/**
+ * Rewrite an instruction slot (system/developer message content) in place.
+ * A single-part text array is mutated so the host payload object keeps its
+ * identity; bare strings are replaced on the caller's field.
+ */
 function rewriteInstructionContent(content: unknown, persona: string): unknown {
 	if (typeof content === "string") return persona;
 	if (!Array.isArray(content)) return persona;
 	if (content.length === 1 && isObject(content[0]) && content[0].type === "text") {
-		return [{ ...content[0], text: persona }];
+		content[0].text = persona;
+		return content;
 	}
 	return persona;
 }
 
-function rewriteMessages(messages: unknown, persona: string): unknown {
-	if (!Array.isArray(messages)) return messages;
-	let replaced = false;
-	return messages.map((message) => {
-		if (replaced || !isObject(message)) return message;
+/** Rewrite the first system/developer message content in place. */
+function rewriteMessages(messages: unknown, persona: string): void {
+	if (!Array.isArray(messages)) return;
+	for (const message of messages) {
+		if (!isObject(message)) continue;
 		const role = message.role;
-		if (role !== "system" && role !== "developer") return message;
-		replaced = true;
-		return { ...message, content: rewriteInstructionContent(message.content, persona) };
-	});
+		if (role !== "system" && role !== "developer") continue;
+		message.content = rewriteInstructionContent(message.content, persona);
+		return;
+	}
 }
 
 export interface RewriteOptions {
@@ -113,28 +119,33 @@ export function isNonAgentProviderPayload(payload: unknown): boolean {
 	return looksLikeSummarizationSystem(surface.system) || looksLikeCompactionUser(surface.lastUser);
 }
 
+/**
+ * Rewrite the provider request in place. Returns the same object so
+ * providers that consume the hook's return value still see the rewrite;
+ * openai-completions-style hosts ignore the return value and rely on the
+ * mutation (see deepseek-optimizer's in-place contract).
+ */
 export function rewriteProviderRequest(payload: unknown, options: RewriteOptions): unknown {
 	if (!isObject(payload)) return payload;
 	if (isNonAgentProviderPayload(payload)) return payload;
-	const next: Record<string, unknown> = { ...payload };
-	if ("system" in next && (typeof next.system === "string" || Array.isArray(next.system))) {
-		next.system = rewriteInstructionContent(next.system, options.persona);
+	if ("system" in payload && (typeof payload.system === "string" || Array.isArray(payload.system))) {
+		payload.system = rewriteInstructionContent(payload.system, options.persona);
 	}
-	if ("instructions" in next && typeof next.instructions === "string") {
-		next.instructions = options.persona;
+	if ("instructions" in payload && typeof payload.instructions === "string") {
+		payload.instructions = options.persona;
 	}
-	if ("messages" in next) {
-		next.messages = rewriteMessages(next.messages, options.persona);
+	if ("messages" in payload) {
+		rewriteMessages(payload.messages, options.persona);
 	}
 	if (options.rewriteTools) {
-		next.tools = rewriteTools(next.tools);
-		if (next.tool_choice !== undefined) {
-			const choice = rewriteToolChoice(next.tool_choice);
-			if (choice === undefined) delete next.tool_choice;
-			else next.tool_choice = choice;
+		payload.tools = rewriteTools(payload.tools);
+		if (payload.tool_choice !== undefined) {
+			const choice = rewriteToolChoice(payload.tool_choice);
+			if (choice === undefined) delete payload.tool_choice;
+			else payload.tool_choice = choice;
 		}
 	}
-	return next;
+	return payload;
 }
 
 function messageText(content: unknown): string {
