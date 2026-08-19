@@ -1,10 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
-import { partitionBootstrapPreludes } from "./adapter/context-filter.ts";
-import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
+import { filterBootstrapPreludes } from "./adapter/context-filter.ts";
+import {
+	applyDeferredToolChoice,
+	bootstrapDroppedToolChoice,
+	extractRequestSurface,
+	rewriteProviderRequest,
+} from "./adapter/payload-rewrite.ts";
 import { reanchorPersona } from "./adapter/prompt.ts";
-import { isAdapterPromoted, resyncSessionState, type AdapterState } from "./adapter/state.ts";
+import { resyncSessionState, type AdapterState } from "./adapter/state.ts";
 import { MINIMAL_PROMPT } from "./dsh/official.ts";
 import { registerDshCommand } from "./settings/command.ts";
 import { registerStrReplaceEditorTool } from "./tools/str-replace-editor.ts";
@@ -13,7 +18,7 @@ function refresh(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterState): 
 	resyncSessionState(state, ctx.sessionManager.getEntries());
 
 	const active = isAdapterActive(ctx, state.config);
-	syncSurface(pi, state, active, isAdapterPromoted(state));
+	syncSurface(pi, state, active, state.hasAssistant || state.hasTool);
 	return active;
 }
 
@@ -24,7 +29,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		surface: "off",
 		hasAssistant: false,
 		hasTool: false,
-		pendingPreludes: [],
+		deferredToolChoice: undefined,
 		lastBoundaryIndex: -1,
 	};
 
@@ -37,7 +42,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		state.surface = "off";
 		state.hasAssistant = false;
 		state.hasTool = false;
-		state.pendingPreludes = [];
+		state.deferredToolChoice = undefined;
 		state.lastBoundaryIndex = -1;
 		refresh(pi, ctx, state);
 	});
@@ -51,7 +56,7 @@ pi.on("session_switch", async (_event, ctx) => {
 	state.surface = "off";
 	state.hasAssistant = false;
 	state.hasTool = false;
-	state.pendingPreludes = [];
+	state.deferredToolChoice = undefined;
 	state.lastBoundaryIndex = -1;
 	refresh(pi, ctx, state);
 });
@@ -65,15 +70,15 @@ pi.on("session_switch", async (_event, ctx) => {
 	pi.on("message_end", async (event, ctx) => {
 		const m = (event as { message?: { role?: string; content?: unknown } }).message;
 		if (!m || m.role !== "assistant") return;
-		const before = isAdapterPromoted(state);
+		const before = state.hasAssistant || state.hasTool;
 		state.hasAssistant = true;
 		if (
 			Array.isArray(m.content) &&
-			m.content.some((p) => p !== null && typeof p === "object" && "type" in p && p.type === "toolCall")
+			m.content.some((p) => p && typeof p === "object" && (p as { type?: string }).type === "toolCall")
 		) {
 			state.hasTool = true;
 		}
-		if (isAdapterPromoted(state) !== before) refresh(pi, ctx, state);
+		if ((state.hasAssistant || state.hasTool) !== before) refresh(pi, ctx, state);
 	});
 
 	pi.on("tool_call", async (_event, ctx) => {
@@ -81,32 +86,14 @@ pi.on("session_switch", async (_event, ctx) => {
 		refresh(pi, ctx, state);
 	});
 
-	// AgentMessage layer, before wire encoding: customType is still intact
-	// here, so the prelude partition matches by type instead of content
-	// fingerprint (which would drift when omp rewords its prompt templates).
+	// Bootstrap only: drop omp-injected custom preludes that point at tools
+	// outside the minimal catalog. The context event fires before wire
+	// encoding, so custom role and attribution are still intact.
 	pi.on("context", async (event, ctx) => {
-		resyncSessionState(state, ctx.sessionManager.getEntries());
-		const promoted = isAdapterPromoted(state);
-		let messages = event.messages;
-
-		if (promoted) {
-			if (state.pendingPreludes.length > 0) {
-				// omp builds eager preludes only for the first user message;
-				// bootstrap dropped them, so re-inject near-field once the
-				// full tool set is back — otherwise the model never sees the
-				// todo/task guidance again this session.
-				messages = [...messages, ...state.pendingPreludes];
-				state.pendingPreludes = [];
-			}
-		} else {
-			const { kept, dropped } = partitionBootstrapPreludes(messages);
-			if (dropped.length > 0) {
-				state.pendingPreludes = dropped;
-				messages = kept;
-			}
-		}
-
-		if (messages === event.messages) return undefined;
+		if (!isAdapterActive(ctx, state.config)) return undefined;
+		if (state.hasAssistant || state.hasTool) return undefined;
+		const messages = filterBootstrapPreludes(event.messages);
+		if (messages === undefined) return undefined;
 		return { messages };
 	});
 
@@ -114,10 +101,25 @@ pi.on("session_switch", async (_event, ctx) => {
 		const active = refresh(pi, ctx, state);
 		if (!active) return undefined;
 
+		const promoted = state.hasAssistant || state.hasTool;
+		const payload = event.payload as Record<string, unknown>;
+		const payloadIsObject = payload !== null && typeof payload === "object";
+
+		if (!promoted && payloadIsObject) {
+			// Bootstrap round: cache a pin dropped by the minimal catalog and
+			// apply it on the first promoted request, where its tool exists.
+			const dropped = bootstrapDroppedToolChoice(payload.tool_choice);
+			if (dropped !== undefined) state.deferredToolChoice = structuredClone(dropped);
+		}
+
 		const assembled = extractRequestSurface(event.payload).system ?? ctx.getSystemPrompt().join("\n");
-		const promoted = isAdapterPromoted(state);
 		const persona = promoted ? reanchorPersona(assembled) : MINIMAL_PROMPT;
 		const rewritten = rewriteProviderRequest(event.payload, { persona, rewriteTools: !promoted });
+
+		if (promoted && payloadIsObject) {
+			applyDeferredToolChoice(payload, state.deferredToolChoice);
+			state.deferredToolChoice = undefined;
+		}
 
 		return rewritten;
 	});

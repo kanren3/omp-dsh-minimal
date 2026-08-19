@@ -51,9 +51,8 @@ function rewriteTools(tools: unknown): unknown {
 }
 
 /**
- * Rewrite an instruction slot (system/developer message content) in place.
- * A single-part text array is mutated so the host payload object keeps its
- * identity; bare strings are replaced on the caller's field.
+ * Rewrite an instruction slot in place: a single-part text array is mutated so
+ * the message object keeps its identity; bare strings are replaced on the field.
  */
 function rewriteInstructionContent(content: unknown, persona: string): unknown {
 	if (typeof content === "string") return persona;
@@ -93,15 +92,38 @@ function namedToolChoiceTool(toolChoice: unknown): string | undefined {
 }
 
 /**
- * Bootstrap only: a named force pinning a tool outside the minimal catalog is
- * self-inconsistent (omp's encode-time guard already ran) and can 4xx on the
- * provider. Drop it, reverting to auto. Pins on the bootstrap pair survive.
+ * Bootstrap only: a named pin forcing a tool outside the minimal catalog is
+ * self-inconsistent and can 4xx on the provider. Drop it, reverting to auto.
+ * Pins on the bootstrap pair survive.
  */
 function rewriteToolChoice(toolChoice: unknown): unknown {
 	const name = namedToolChoiceTool(toolChoice);
 	if (name === undefined) return toolChoice;
 	if (BOOTSTRAP_TOOL_NAMES.includes(name)) return toolChoice;
 	return undefined;
+}
+
+/**
+ * The named pin a bootstrap request drops because its tool is not in the
+ * minimal catalog; undefined for open choices and catalog pins. The caller
+ * may defer it until the first promoted request, where the full catalog
+ * makes it valid again.
+ */
+export function bootstrapDroppedToolChoice(toolChoice: unknown): unknown {
+	const name = namedToolChoiceTool(toolChoice);
+	if (name === undefined) return undefined;
+	if (BOOTSTRAP_TOOL_NAMES.includes(name)) return undefined;
+	return toolChoice;
+}
+
+/** Apply a deferred pin unless the request already carries one. */
+export function applyDeferredToolChoice(
+	payload: Record<string, unknown>,
+	deferred: unknown,
+): boolean {
+	if (deferred === undefined || payload.tool_choice !== undefined) return false;
+	payload.tool_choice = deferred;
+	return true;
 }
 
 export function looksLikeSummarizationSystem(system: string | undefined): boolean {
@@ -120,10 +142,9 @@ export function isNonAgentProviderPayload(payload: unknown): boolean {
 }
 
 /**
- * Rewrite the provider request in place. Returns the same object so
- * providers that consume the hook's return value still see the rewrite;
- * openai-completions-style hosts ignore the return value and rely on the
- * mutation (see deepseek-optimizer's in-place contract).
+ * Rewrite the provider request in place and return the same object. Some
+ * hosts (the openai-completions provider) call the payload hook without
+ * consuming its return value, so a rewritten copy would never reach the wire.
  */
 export function rewriteProviderRequest(payload: unknown, options: RewriteOptions): unknown {
 	if (!isObject(payload)) return payload;

@@ -1,50 +1,61 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { partitionBootstrapPreludes } from "../src/adapter/context-filter.ts";
+import { filterBootstrapPreludes } from "../src/adapter/context-filter.ts";
 
-function customMessage(customType: string): AgentMessage {
+function customMessage(
+	customType: string,
+	attribution: "user" | "agent" = "agent",
+	display = true,
+): AgentMessage {
 	return {
 		role: "custom",
 		customType,
 		content: customType,
-		display: false,
+		display,
+		attribution,
 		timestamp: Date.now(),
 	} as AgentMessage;
 }
 
-const todoPrelude = customMessage("eager-todo-prelude");
-const taskPrelude = customMessage("eager-task-prelude");
-const otherCustom = customMessage("orchestrate-notice");
-const userMessage: AgentMessage = {
-	role: "user",
-	content: "hi",
-	timestamp: Date.now(),
-};
+function userMessage(text: string): AgentMessage {
+	return { role: "user", content: text, timestamp: Date.now() };
+}
 
-test("partition splits both injected preludes by customType", () => {
-	const { kept, dropped } = partitionBootstrapPreludes([userMessage, todoPrelude, taskPrelude, otherCustom]);
-	assert.deepEqual(kept, [userMessage, otherCustom]);
-	assert.deepEqual(dropped, [todoPrelude, taskPrelude]);
+test("drops agent-attributed custom preludes (mode contexts)", () => {
+	const messages = [userMessage("hi"), customMessage("plan-mode-context", "agent")];
+	assert.deepEqual(filterBootstrapPreludes(messages), [messages[0]]);
 });
 
-test("partition keeps non-prelude custom messages and user turns", () => {
-	const messages = [userMessage, otherCustom];
-	const { kept, dropped } = partitionBootstrapPreludes(messages);
-	assert.deepEqual(kept, messages);
-	assert.deepEqual(dropped, []);
+test("drops hidden user-attributed magic-keyword notices", () => {
+	// Real values: orchestrate/workflow/ultrathink notices are attribution:"user"
+	// but display:false — they guide tools outside the minimal catalog.
+	const messages = [
+		userMessage("hi"),
+		customMessage("orchestrate-notice", "user", false),
+		customMessage("ultrathink-notice", "user", false),
+	];
+	assert.deepEqual(filterBootstrapPreludes(messages), [messages[0]]);
 });
 
-test("partition without preludes returns no dropped", () => {
-	const messages = [userMessage];
-	const { kept, dropped } = partitionBootstrapPreludes(messages);
-	assert.deepEqual(kept, messages);
-	assert.deepEqual(dropped, []);
+test("keeps visible user-attributed custom messages (skill prompts)", () => {
+	const messages = [userMessage("hi"), customMessage("skill-prompt", "user", true)];
+	assert.equal(filterBootstrapPreludes(messages), undefined);
 });
 
-test("partition keeps arbitrary custom messages intact", () => {
-	const messages = [userMessage, otherCustom, todoPrelude];
-	const { kept, dropped } = partitionBootstrapPreludes(messages);
-	assert.deepEqual(kept, [userMessage, otherCustom]);
-	assert.deepEqual(dropped, [todoPrelude]);
+test("returns undefined when nothing is dropped", () => {
+	const messages = [userMessage("hi")];
+	assert.equal(filterBootstrapPreludes(messages), undefined);
+});
+
+test("drops mixed preludes while keeping user turns and visible skill prompts", () => {
+	const userTurn = userMessage("hi");
+	const skill = customMessage("skill-prompt", "user", true);
+	const messages = [
+		customMessage("plan-mode-context", "agent"),
+		userTurn,
+		customMessage("workflow-notice", "user", false),
+		skill,
+	];
+	assert.deepEqual(filterBootstrapPreludes(messages), [userTurn, skill]);
 });

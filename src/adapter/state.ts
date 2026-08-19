@@ -1,4 +1,3 @@
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
 import type { DshMinimalConfig } from "./config.ts";
 import { latestBoundaryIndex, scanSessionPhase } from "./promotion.ts";
@@ -19,24 +18,10 @@ export interface AdapterState {
 	surface: ToolSurface;
 	hasAssistant: boolean;
 	hasTool: boolean;
-	/**
-	 * Bootstrap preludes (todo/task guidance) filtered out of the first
-	 * request, re-injected near-field once the session is promoted. omp
-	 * builds them only for the first user message and never rebuilds them.
-	 */
-	pendingPreludes: AgentMessage[];
+	/** Pin dropped from the bootstrap request, applied on the first promoted request. */
+	deferredToolChoice?: unknown;
 	/** Index of the newest compaction/reset boundary already folded into the promotion flags. */
 	lastBoundaryIndex: number;
-}
-
-/**
- * Promoted when the assistant replied or called a tool. Compaction and
- * `/clear` each start a new bootstrap epoch (flags reset by resync).
- */
-export function isAdapterPromoted(
-	state: Pick<AdapterState, "hasAssistant" | "hasTool">,
-): boolean {
-	return state.hasAssistant || state.hasTool;
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "../adapter/activation.ts";
 import { readDshMinimalConfig, writeDshMinimalConfig } from "../adapter/config.ts";
-import { isAdapterPromoted, resyncSessionState, type AdapterState } from "../adapter/state.ts";
+import { resyncSessionState, type AdapterState } from "../adapter/state.ts";
 
 const DSH_COMMAND_COMPLETIONS = ["on", "off", "status"] as const;
 const DSH_USAGE = "Usage: /dsh, /dsh status, /dsh on|off";
@@ -20,7 +20,7 @@ export function formatDshStatus(
 		);
 		return hasModel ? "dsh: on · current model not matched" : "dsh: on · no current model";
 	}
-	const promoted = isAdapterPromoted(state);
+	const promoted = state.hasAssistant || state.hasTool;
 	return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}`;
 }
 
@@ -48,7 +48,7 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, config
 				}
 				state.config = nextConfig;
 				const active = isAdapterActive(ctx, state.config);
-				syncSurface(pi, state, active, isAdapterPromoted(state));
+				syncSurface(pi, state, active, state.hasAssistant || state.hasTool);
 				ctx.ui.notify(formatDshStatus(state, active, ctx.model), "info");
 				return;
 			}
