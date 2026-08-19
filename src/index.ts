@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
+import { filterBootstrapPreludes } from "./adapter/context-filter.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
 import { reanchorPersona } from "./adapter/prompt.ts";
 import { resyncSessionState, type AdapterState } from "./adapter/state.ts";
@@ -75,6 +76,17 @@ pi.on("session_switch", async (_event, ctx) => {
 	pi.on("tool_call", async (_event, ctx) => {
 		state.hasTool = true;
 		refresh(pi, ctx, state);
+	});
+
+	// AgentMessage layer, before wire encoding: customType is still intact
+	// here, so the prelude filter matches by type instead of content
+	// fingerprint (which would drift when omp rewords its prompt templates).
+	pi.on("context", async (event, ctx) => {
+		resyncSessionState(state, ctx.sessionManager.getEntries());
+		const promoted = state.hasAssistant || state.hasTool;
+		const messages = filterBootstrapPreludes(event.messages, promoted);
+		if (messages === event.messages) return undefined;
+		return { messages };
 	});
 
 	pi.on("before_provider_request", async (event, ctx) => {

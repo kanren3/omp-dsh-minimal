@@ -129,3 +129,62 @@ test("promoted Pro rewrites persona but leaves Pi tools", () => {
 	assert.equal(surface.system, MINIMAL_PROMPT);
 	assert.deepEqual(surface.toolNames, ["read", "bash"]);
 });
+
+test("bootstrap drops a named tool_choice pinning an outside tool", () => {
+	const rewritten = rewriteMinimalProviderRequest({
+		system: "Pi default prompt",
+		tool_choice: { type: "function", function: { name: "todo" } },
+		tools: [{ type: "function", function: { name: "read" } }],
+	});
+	const body = rewritten as Record<string, unknown>;
+	assert.equal("tool_choice" in body, false);
+});
+
+test("bootstrap drops an anthropic-style pin outside the catalog", () => {
+	const rewritten = rewriteMinimalProviderRequest({
+		system: "Pi default prompt",
+		tool_choice: { type: "tool", name: "todo" },
+		tools: [{ type: "function", function: { name: "read" } }],
+	});
+	const body = rewritten as Record<string, unknown>;
+	assert.equal("tool_choice" in body, false);
+});
+
+test("bootstrap keeps a pin on a catalog tool and open choices", () => {
+	const pinned = rewriteMinimalProviderRequest({
+		system: "Pi default prompt",
+		tool_choice: { type: "function", function: { name: "bash" } },
+		tools: [{ type: "function", function: { name: "read" } }],
+	});
+	assert.deepEqual(pinned, {
+		system: MINIMAL_PROMPT,
+		tool_choice: { type: "function", function: { name: "bash" } },
+		tools: [
+			{
+				type: "function",
+				function: {
+					name: "bash",
+					description: MINIMAL_BASH_DESCRIPTION,
+					parameters: DSH_BASH_PARAMETERS,
+				},
+			},
+			{
+				type: "function",
+				function: {
+					name: "str_replace_editor",
+					description: STR_REPLACE_EDITOR_DESCRIPTION,
+					parameters: DSH_STR_REPLACE_EDITOR_PARAMETERS,
+				},
+			},
+		],
+	});
+	for (const choice of ["auto", "required", "none"]) {
+		const rewritten = rewriteMinimalProviderRequest({
+			system: "Pi default prompt",
+			tool_choice: choice,
+			tools: [{ type: "function", function: { name: "read" } }],
+		});
+		const body = rewritten as Record<string, unknown>;
+		assert.equal(body.tool_choice, choice);
+	}
+});

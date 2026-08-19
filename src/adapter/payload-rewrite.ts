@@ -1,4 +1,5 @@
 import { DSH_MINIMAL_TOOLS } from "../dsh/official.ts";
+import { BOOTSTRAP_TOOL_NAMES } from "./tool-set.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -75,6 +76,28 @@ export interface RewriteOptions {
 	rewriteTools: boolean;
 }
 
+/** Name pinned by a named tool_choice, any wire dialect; undefined when open. */
+function namedToolChoiceTool(toolChoice: unknown): string | undefined {
+	if (!isObject(toolChoice)) return undefined;
+	if (toolChoice.type !== "function" && toolChoice.type !== "tool") return undefined;
+	const fn = toolChoice.function;
+	if (isObject(fn) && typeof fn.name === "string" && fn.name.length > 0) return fn.name;
+	if (typeof toolChoice.name === "string" && toolChoice.name.length > 0) return toolChoice.name;
+	return undefined;
+}
+
+/**
+ * Bootstrap only: a named force pinning a tool outside the minimal catalog is
+ * self-inconsistent (omp's encode-time guard already ran) and can 4xx on the
+ * provider. Drop it, reverting to auto. Pins on the bootstrap pair survive.
+ */
+function rewriteToolChoice(toolChoice: unknown): unknown {
+	const name = namedToolChoiceTool(toolChoice);
+	if (name === undefined) return toolChoice;
+	if (BOOTSTRAP_TOOL_NAMES.includes(name)) return toolChoice;
+	return undefined;
+}
+
 export function looksLikeSummarizationSystem(system: string | undefined): boolean {
 	return Boolean(system && /context summarization assistant/i.test(system));
 }
@@ -103,7 +126,14 @@ export function rewriteProviderRequest(payload: unknown, options: RewriteOptions
 	if ("messages" in next) {
 		next.messages = rewriteMessages(next.messages, options.persona);
 	}
-	if (options.rewriteTools) next.tools = rewriteTools(next.tools);
+	if (options.rewriteTools) {
+		next.tools = rewriteTools(next.tools);
+		if (next.tool_choice !== undefined) {
+			const choice = rewriteToolChoice(next.tool_choice);
+			if (choice === undefined) delete next.tool_choice;
+			else next.tool_choice = choice;
+		}
+	}
 	return next;
 }
 
