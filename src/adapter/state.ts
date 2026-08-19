@@ -18,6 +18,8 @@ export interface AdapterState {
 	surface: ToolSurface;
 	hasAssistant: boolean;
 	hasTool: boolean;
+	/** Pin dropped from the bootstrap request, applied on the first promoted request. */
+	deferredToolChoice?: unknown;
 	/** Index of the newest compaction/reset boundary already folded into the promotion flags. */
 	lastBoundaryIndex: number;
 }

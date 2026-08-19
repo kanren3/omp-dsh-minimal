@@ -1,4 +1,5 @@
 import { DSH_MINIMAL_TOOLS } from "../dsh/official.ts";
+import { BOOTSTRAP_TOOL_NAMES } from "./tool-set.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -49,30 +50,80 @@ function rewriteTools(tools: unknown): unknown {
 	return exactChatCompletionsTools();
 }
 
+/**
+ * Rewrite an instruction slot in place: a single-part text array is mutated so
+ * the message object keeps its identity; bare strings are replaced on the field.
+ */
 function rewriteInstructionContent(content: unknown, persona: string): unknown {
 	if (typeof content === "string") return persona;
 	if (!Array.isArray(content)) return persona;
 	if (content.length === 1 && isObject(content[0]) && content[0].type === "text") {
-		return [{ ...content[0], text: persona }];
+		content[0].text = persona;
+		return content;
 	}
 	return persona;
 }
 
-function rewriteMessages(messages: unknown, persona: string): unknown {
-	if (!Array.isArray(messages)) return messages;
-	let replaced = false;
-	return messages.map((message) => {
-		if (replaced || !isObject(message)) return message;
+/** Rewrite the first system/developer message content in place. */
+function rewriteMessages(messages: unknown, persona: string): void {
+	if (!Array.isArray(messages)) return;
+	for (const message of messages) {
+		if (!isObject(message)) continue;
 		const role = message.role;
-		if (role !== "system" && role !== "developer") return message;
-		replaced = true;
-		return { ...message, content: rewriteInstructionContent(message.content, persona) };
-	});
+		if (role !== "system" && role !== "developer") continue;
+		message.content = rewriteInstructionContent(message.content, persona);
+		return;
+	}
 }
 
 export interface RewriteOptions {
 	persona: string;
 	rewriteTools: boolean;
+}
+
+/** Name pinned by a named tool_choice, any wire dialect; undefined when open. */
+function namedToolChoiceTool(toolChoice: unknown): string | undefined {
+	if (!isObject(toolChoice)) return undefined;
+	if (toolChoice.type !== "function" && toolChoice.type !== "tool") return undefined;
+	const fn = toolChoice.function;
+	if (isObject(fn) && typeof fn.name === "string" && fn.name.length > 0) return fn.name;
+	if (typeof toolChoice.name === "string" && toolChoice.name.length > 0) return toolChoice.name;
+	return undefined;
+}
+
+/**
+ * Bootstrap only: a named pin forcing a tool outside the minimal catalog is
+ * self-inconsistent and can 4xx on the provider. Drop it, reverting to auto.
+ * Pins on the bootstrap pair survive.
+ */
+function rewriteToolChoice(toolChoice: unknown): unknown {
+	const name = namedToolChoiceTool(toolChoice);
+	if (name === undefined) return toolChoice;
+	if (BOOTSTRAP_TOOL_NAMES.includes(name)) return toolChoice;
+	return undefined;
+}
+
+/**
+ * The named pin a bootstrap request drops because its tool is not in the
+ * minimal catalog; undefined for open choices and catalog pins. The caller
+ * may defer it until the first promoted request, where the full catalog
+ * makes it valid again.
+ */
+export function bootstrapDroppedToolChoice(toolChoice: unknown): unknown {
+	const name = namedToolChoiceTool(toolChoice);
+	if (name === undefined) return undefined;
+	if (BOOTSTRAP_TOOL_NAMES.includes(name)) return undefined;
+	return toolChoice;
+}
+
+/** Apply a deferred pin unless the request already carries one. */
+export function applyDeferredToolChoice(
+	payload: Record<string, unknown>,
+	deferred: unknown,
+): boolean {
+	if (deferred === undefined || payload.tool_choice !== undefined) return false;
+	payload.tool_choice = deferred;
+	return true;
 }
 
 export function looksLikeSummarizationSystem(system: string | undefined): boolean {
@@ -90,21 +141,32 @@ export function isNonAgentProviderPayload(payload: unknown): boolean {
 	return looksLikeSummarizationSystem(surface.system) || looksLikeCompactionUser(surface.lastUser);
 }
 
+/**
+ * Rewrite the provider request in place and return the same object. Some
+ * hosts (the openai-completions provider) call the payload hook without
+ * consuming its return value, so a rewritten copy would never reach the wire.
+ */
 export function rewriteProviderRequest(payload: unknown, options: RewriteOptions): unknown {
 	if (!isObject(payload)) return payload;
 	if (isNonAgentProviderPayload(payload)) return payload;
-	const next: Record<string, unknown> = { ...payload };
-	if ("system" in next && (typeof next.system === "string" || Array.isArray(next.system))) {
-		next.system = rewriteInstructionContent(next.system, options.persona);
+	if ("system" in payload && (typeof payload.system === "string" || Array.isArray(payload.system))) {
+		payload.system = rewriteInstructionContent(payload.system, options.persona);
 	}
-	if ("instructions" in next && typeof next.instructions === "string") {
-		next.instructions = options.persona;
+	if ("instructions" in payload && typeof payload.instructions === "string") {
+		payload.instructions = options.persona;
 	}
-	if ("messages" in next) {
-		next.messages = rewriteMessages(next.messages, options.persona);
+	if ("messages" in payload) {
+		rewriteMessages(payload.messages, options.persona);
 	}
-	if (options.rewriteTools) next.tools = rewriteTools(next.tools);
-	return next;
+	if (options.rewriteTools) {
+		payload.tools = rewriteTools(payload.tools);
+		if (payload.tool_choice !== undefined) {
+			const choice = rewriteToolChoice(payload.tool_choice);
+			if (choice === undefined) delete payload.tool_choice;
+			else payload.tool_choice = choice;
+		}
+	}
+	return payload;
 }
 
 function messageText(content: unknown): string {
