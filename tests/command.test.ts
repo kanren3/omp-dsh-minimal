@@ -111,6 +111,25 @@ test("formatDshStatus reports switch plus promotion status", () => {
 	);
 });
 
+test("formatDshStatus reports classification and release", () => {
+	assert.equal(
+		formatDshStatus(makeState({ classification: "spec" }), true),
+		"dsh: on · awaiting promotion · spec",
+	);
+	assert.equal(
+		formatDshStatus(makeState({ classification: "spec", hasAssistant: true }), true),
+		"dsh: on · promoted · spec",
+	);
+	assert.equal(
+		formatDshStatus(makeState({ classification: "react" }), true),
+		"dsh: on · released (react)",
+	);
+	assert.equal(
+		formatDshStatus(makeState({ classification: "weak" }), true),
+		"dsh: on · released (weak)",
+	);
+});
+
 test("handler on writes config and notifies anchored awaiting", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-on-"));
 	const configPath = join(dir, "omp-dsh-minimal.json");

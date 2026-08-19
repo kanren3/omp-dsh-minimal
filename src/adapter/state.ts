@@ -1,4 +1,5 @@
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
+import type { TaskClassification } from "./classify.ts";
 import type { DshMinimalConfig } from "./config.ts";
 import { latestBoundaryIndex, scanSessionPhase } from "./promotion.ts";
 
@@ -18,8 +19,23 @@ export interface AdapterState {
 	surface: ToolSurface;
 	hasAssistant: boolean;
 	hasTool: boolean;
+	/**
+	 * First-turn task classification, locked at the first agent request.
+	 * Non-spec tasks release the session: no bootstrap, native omp surface.
+	 */
+	classification?: TaskClassification;
 	/** Index of the newest compaction/reset boundary already folded into the promotion flags. */
 	lastBoundaryIndex: number;
+}
+
+/**
+ * Promoted when the assistant replied, called a tool, or the first-turn
+ * classification released the session (react/weak tasks skip bootstrap).
+ */
+export function isAdapterPromoted(
+	state: Pick<AdapterState, "hasAssistant" | "hasTool" | "classification">,
+): boolean {
+	return state.hasAssistant || state.hasTool || (state.classification !== undefined && state.classification !== "spec");
 }
 
 /**

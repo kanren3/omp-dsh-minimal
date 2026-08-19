@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "../adapter/activation.ts";
 import { readDshMinimalConfig, writeDshMinimalConfig } from "../adapter/config.ts";
-import { resyncSessionState, type AdapterState } from "../adapter/state.ts";
+import { isAdapterPromoted, resyncSessionState, type AdapterState } from "../adapter/state.ts";
 
 const DSH_COMMAND_COMPLETIONS = ["on", "off", "status"] as const;
 const DSH_USAGE = "Usage: /dsh, /dsh status, /dsh on|off";
@@ -20,8 +20,14 @@ export function formatDshStatus(
 		);
 		return hasModel ? "dsh: on · current model not matched" : "dsh: on · no current model";
 	}
-	const promoted = state.hasAssistant || state.hasTool;
-	return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}`;
+	const promoted = isAdapterPromoted(state);
+	if (state.classification === undefined) {
+		return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}`;
+	}
+	if (state.classification === "spec") {
+		return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"} · spec`;
+	}
+	return `dsh: on · released (${state.classification})`;
 }
 
 export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, configPath?: string): void {
@@ -48,7 +54,7 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, config
 				}
 				state.config = nextConfig;
 				const active = isAdapterActive(ctx, state.config);
-				syncSurface(pi, state, active, state.hasAssistant || state.hasTool);
+				syncSurface(pi, state, active, isAdapterPromoted(state));
 				ctx.ui.notify(formatDshStatus(state, active, ctx.model), "info");
 				return;
 			}

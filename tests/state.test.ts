@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
-import { ANCHORED_ENTRY_TYPE, entriesHaveAnchoredMarker, resyncSessionState } from "../src/adapter/state.ts";
+import {
+	ANCHORED_ENTRY_TYPE,
+	entriesHaveAnchoredMarker,
+	isAdapterPromoted,
+	resyncSessionState,
+} from "../src/adapter/state.ts";
 
 function customEntry(customType: string): SessionEntry {
 	return {
@@ -117,4 +122,13 @@ test("resyncSessionState restores promotion flags from entries after the boundar
 	assert.equal(state.hasAssistant, true);
 	assert.equal(state.hasTool, false);
 	assert.equal(state.lastBoundaryIndex, 1);
+});
+
+test("isAdapterPromoted: assistant, tool, or released classification promotes", () => {
+	assert.equal(isAdapterPromoted({ hasAssistant: false, hasTool: false, classification: undefined }), false);
+	assert.equal(isAdapterPromoted({ hasAssistant: false, hasTool: false, classification: "spec" }), false);
+	assert.equal(isAdapterPromoted({ hasAssistant: true, hasTool: false, classification: undefined }), true);
+	assert.equal(isAdapterPromoted({ hasAssistant: false, hasTool: true, classification: undefined }), true);
+	assert.equal(isAdapterPromoted({ hasAssistant: false, hasTool: false, classification: "react" }), true);
+	assert.equal(isAdapterPromoted({ hasAssistant: false, hasTool: false, classification: "weak" }), true);
 });
