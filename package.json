@@ -13,12 +13,6 @@
     "test": "bun test tests/",
     "check": "npm run typecheck && npm run test"
   },
-  "peerDependencies": {
-    "@oh-my-pi/pi-agent-core": "*",
-    "@oh-my-pi/pi-ai": "*",
-    "@oh-my-pi/pi-coding-agent": "*",
-    "@oh-my-pi/pi-tui": "*"
-  },
   "devDependencies": {
     "@oh-my-pi/pi-agent-core": "*",
     "@oh-my-pi/pi-ai": "*",
