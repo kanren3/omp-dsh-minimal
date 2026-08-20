@@ -4,6 +4,7 @@ import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 
 export interface DshMinimalConfig {
 	enabled: boolean;
+	dumpRequests: boolean;
 	modelPatterns: string[];
 }
 
@@ -13,6 +14,7 @@ export const DEFAULT_MODEL_PATTERNS = ["deepseek-v4-pro", "deepseek-v4-flash"];
 
 export const DEFAULT_DSH_MINIMAL_CONFIG: DshMinimalConfig = {
 	enabled: true,
+	dumpRequests: false,
 	modelPatterns: [...DEFAULT_MODEL_PATTERNS],
 };
 
@@ -48,6 +50,10 @@ export function readDshMinimalConfig(configPath: string = getDshMinimalConfigPat
 		if (!isObject(parsed)) return cloneConfig(DEFAULT_DSH_MINIMAL_CONFIG);
 		return {
 			enabled: typeof parsed.enabled === "boolean" ? parsed.enabled : DEFAULT_DSH_MINIMAL_CONFIG.enabled,
+			dumpRequests:
+				typeof parsed.dumpRequests === "boolean"
+					? parsed.dumpRequests
+					: DEFAULT_DSH_MINIMAL_CONFIG.dumpRequests,
 			modelPatterns: normalizeModelPatterns(parsed.modelPatterns),
 		};
 	} catch (error) {

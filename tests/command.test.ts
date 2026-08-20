@@ -111,6 +111,30 @@ test("formatDshStatus reports switch plus promotion status", () => {
 	);
 });
 
+// The dump indicator only appears when requests are actually rewritten and
+// dumped: adapter off or model not matched means no dump ever happens.
+test("formatDshStatus appends request dump indicator only when active", () => {
+	assert.equal(
+		formatDshStatus(makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, dumpRequests: true } }), true),
+		"dsh: on · awaiting promotion · request dump on",
+	);
+	assert.equal(
+		formatDshStatus(
+			makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, enabled: false, dumpRequests: true } }),
+			true,
+		),
+		"dsh: off",
+	);
+	assert.equal(
+		formatDshStatus(
+			makeState({ config: { ...DEFAULT_DSH_MINIMAL_CONFIG, dumpRequests: true } }),
+			false,
+			{ id: "claude-sonnet" },
+		),
+		"dsh: on · current model not matched",
+	);
+});
+
 test("handler on writes config and notifies anchored awaiting", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-on-"));
 	const configPath = join(dir, "omp-dsh-minimal.json");
@@ -133,6 +157,32 @@ test("handler off writes config and notifies dsh: off", async () => {
 	await handler("off", ctx);
 	assert.equal((JSON.parse(readFileSync(configPath, "utf8")) as { enabled: boolean }).enabled, false);
 	assert.deepEqual(notifications, [["dsh: off", "info"]]);
+});
+
+test("handler dump on writes dumpRequests true and notifies", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-dump-on-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
+	const state = makeState();
+	const { pi, handler } = makePi();
+	const { ctx, notifications } = makeCtx();
+	registerDshCommand(pi, state, configPath);
+	await handler("dump on", ctx);
+	const raw = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+	assert.equal(raw.dumpRequests, true);
+	assert.deepEqual(notifications, [["dsh: request dump on", "info"]]);
+});
+
+test("handler dump off writes dumpRequests false and notifies", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "omp-dsh-minimal-cmd-dump-off-"));
+	const configPath = join(dir, "omp-dsh-minimal.json");
+	const state = makeState();
+	const { pi, handler } = makePi();
+	const { ctx, notifications } = makeCtx();
+	registerDshCommand(pi, state, configPath);
+	await handler("dump off", ctx);
+	const raw = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+	assert.equal(raw.dumpRequests, false);
+	assert.deepEqual(notifications, [["dsh: request dump off", "info"]]);
 });
 
 test("bare and status notify status without writing", async () => {
@@ -227,5 +277,5 @@ test("unknown argument notifies the usage line", async () => {
 	const { ctx, notifications } = makeCtx();
 	registerDshCommand(pi, state, configPath);
 	await handler("bogus", ctx);
-	assert.deepEqual(notifications, [["Usage: /dsh, /dsh status, /dsh on|off", "warning"]]);
+	assert.deepEqual(notifications, [["Usage: /dsh, /dsh status, /dsh on|off, /dsh dump on|off", "warning"]]);
 });

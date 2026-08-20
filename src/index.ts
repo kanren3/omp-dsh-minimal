@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { filterBootstrapPreludes } from "./adapter/context-filter.ts";
+import { dumpRequest } from "./adapter/log.ts";
 import {
 	applyDeferredToolChoice,
 	bootstrapDroppedToolChoice,
@@ -112,6 +113,13 @@ pi.on("session_switch", async (_event, ctx) => {
 			if (dropped !== undefined) state.deferredToolChoice = structuredClone(dropped);
 		}
 
+		const modelDesc =
+			ctx.model && typeof ctx.model === "object"
+				? [ctx.model.provider, ctx.model.id, ctx.model.name].filter((v) => typeof v === "string" && v).join("/")
+				: undefined;
+		const surface = promoted ? "promoted" : "bootstrap";
+		dumpRequest(event.payload, "pre", surface, promoted, modelDesc, state.config.dumpRequests);
+
 		const assembled = extractRequestSurface(event.payload).system ?? ctx.getSystemPrompt().join("\n");
 		const persona = promoted ? reanchorPersona(assembled) : MINIMAL_PROMPT;
 		const rewritten = rewriteProviderRequest(event.payload, { persona, rewriteTools: !promoted });
@@ -121,6 +129,7 @@ pi.on("session_switch", async (_event, ctx) => {
 			state.deferredToolChoice = undefined;
 		}
 
+		dumpRequest(rewritten, "post", surface, promoted, modelDesc, state.config.dumpRequests);
 		return rewritten;
 	});
 }

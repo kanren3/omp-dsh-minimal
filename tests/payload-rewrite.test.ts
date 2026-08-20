@@ -6,6 +6,7 @@ import {
 	extractRequestSurface,
 	rewriteProviderRequest,
 } from "../src/adapter/payload-rewrite.ts";
+import { reanchorPersona } from "../src/adapter/prompt.ts";
 import {
 	DSH_BASH_PARAMETERS,
 	DSH_STR_REPLACE_EDITOR_PARAMETERS,
@@ -117,11 +118,12 @@ test("replaces a multi-part system array with the persona string", () => {
 	assert.equal(payload.system, MINIMAL_PROMPT);
 });
 
-// Only the first system/developer message is rewritten; a second one is left
-// untouched so the host's mid-conversation system turns survive intact.
-test("rewrites only the first system or developer message", () => {
+// Bootstrap replaces the entire leading system run with one persona message;
+// omp emits the harness persona and the PROJECT/MCP-routes block as separate
+// system turns, and bootstrap keeps only the first.
+test("bootstrap collapses consecutive leading system messages", () => {
 	const firstPart = { type: "text", text: "Pi default prompt" };
-	const secondPart = { type: "text", text: "keep me" };
+	const secondPart = { type: "text", text: "leak: MCP Tool Routes" };
 	const payload = {
 		messages: [
 			{ role: "system", content: [firstPart] },
@@ -131,7 +133,28 @@ test("rewrites only the first system or developer message", () => {
 	const rewritten = rewriteMinimalProviderRequest(payload);
 
 	assert.equal(firstPart.text, MINIMAL_PROMPT);
-	assert.equal(secondPart.text, "keep me");
+	assert.equal(payload.messages.length, 1);
+	assert.equal(payload.messages[0].role, "system");
+	assert.equal(rewritten, payload);
+});
+
+// A system turn after a user message is mid-conversation, not part of the
+// leading system run, so it stays intact in both bootstrap and promoted.
+test("bootstrap leaves a mid-conversation system message intact", () => {
+	const firstPart = { type: "text", text: "Pi default prompt" };
+	const midPart = { type: "text", text: "keep me" };
+	const payload = {
+		messages: [
+			{ role: "system", content: [firstPart] },
+			{ role: "user", content: "hi" },
+			{ role: "system", content: [midPart] },
+		],
+	};
+	const rewritten = rewriteMinimalProviderRequest(payload);
+
+	assert.equal(firstPart.text, MINIMAL_PROMPT);
+	assert.equal(midPart.text, "keep me");
+	assert.equal(payload.messages.length, 3);
 	assert.equal(rewritten, payload);
 });
 
@@ -269,4 +292,57 @@ test("promoted Pro rewrites persona but leaves Pi tools", () => {
 	const surface = extractRequestSurface(rewritten);
 	assert.equal(surface.system, MINIMAL_PROMPT);
 	assert.deepEqual(surface.toolNames, ["read", "bash"]);
+});
+
+// Promoted mode reanchors only the first system message; a second system
+// turn (e.g. the PROJECT/MCP-routes block omp emits separately) stays intact
+// so the model keeps its tool-routing guidance after promotion.
+test("promoted reanchors only the first of multiple system messages", () => {
+	const first = { role: "system", content: "Pi default prompt" };
+	const second = { role: "system", content: "PROJECT\n\n## MCP Tool Routes" };
+	const payload = {
+		messages: [first, second, { role: "user", content: "hi" }],
+		tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
+	};
+	rewriteProviderRequest(payload, { persona: MINIMAL_PROMPT, rewriteTools: false });
+
+	assert.equal(first.content, MINIMAL_PROMPT);
+	assert.equal(second.content, "PROJECT\n\n## MCP Tool Routes");
+	assert.equal(payload.messages.length, 3);
+});
+
+// extractRequestSurface reads only the first leading system/developer
+// message — the one promoted rewriting replaces — so the surface never
+// folds in turns that stay on the wire as separate messages. System turns
+// after a user/assistant message are host injections, not harness persona.
+test("extractRequestSurface reads only the first leading system message", () => {
+	const surface = extractRequestSurface({
+		messages: [
+			{ role: "system", content: "part one" },
+			{ role: "developer", content: "part two" },
+			{ role: "user", content: "hi" },
+			{ role: "system", content: "part three" },
+		],
+	});
+	assert.equal(surface.system, "part one");
+});
+
+// Promoted flow end to end: surface → reanchorPersona → rewrite must be a
+// fixed point, so repeated rounds never duplicate the second system turn.
+test("promoted rounds do not duplicate the second system message", () => {
+	const payload = {
+		messages: [
+			{ role: "system", content: "Pi default prompt" },
+			{ role: "system", content: "PROJECT BLOCK" },
+			{ role: "user", content: "hi" },
+		],
+	};
+
+	for (let round = 0; round < 3; round++) {
+		const assembled = extractRequestSurface(payload).system ?? "";
+		rewriteProviderRequest(payload, { persona: reanchorPersona(assembled), rewriteTools: false });
+		const text = payload.messages.map((message) => String(message.content)).join("\n");
+		assert.equal(text.split("PROJECT BLOCK").length - 1, 1);
+		assert.equal(payload.messages.length, 3);
+	}
 });

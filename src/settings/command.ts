@@ -3,8 +3,8 @@ import { isAdapterActive, syncSurface } from "../adapter/activation.ts";
 import { readDshMinimalConfig, writeDshMinimalConfig } from "../adapter/config.ts";
 import { resyncSessionState, type AdapterState } from "../adapter/state.ts";
 
-const DSH_COMMAND_COMPLETIONS = ["on", "off", "status"] as const;
-const DSH_USAGE = "Usage: /dsh, /dsh status, /dsh on|off";
+const DSH_COMMAND_COMPLETIONS = ["on", "off", "status", "dump on", "dump off"] as const;
+const DSH_USAGE = "Usage: /dsh, /dsh status, /dsh on|off, /dsh dump on|off";
 
 /** Bare `/dsh` output: master switch, current-model activation, and promotion status. */
 export function formatDshStatus(
@@ -20,8 +20,11 @@ export function formatDshStatus(
 		);
 		return hasModel ? "dsh: on · current model not matched" : "dsh: on · no current model";
 	}
+	// Dumping only happens on requests the adapter rewrites, so the indicator
+	// belongs to the active branch alone.
 	const promoted = state.hasAssistant || state.hasTool;
-	return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}`;
+	const dumping = state.config.dumpRequests ? " · request dump on" : "";
+	return `dsh: on · ${promoted ? "promoted" : "awaiting promotion"}${dumping}`;
 }
 
 export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, configPath?: string): void {
@@ -50,6 +53,17 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState, config
 				const active = isAdapterActive(ctx, state.config);
 				syncSurface(pi, state, active, state.hasAssistant || state.hasTool);
 				ctx.ui.notify(formatDshStatus(state, active, ctx.model), "info");
+				return;
+			}
+			if (head === "dump on" || head === "dump off") {
+				const nextConfig = { ...state.config, dumpRequests: head === "dump on" };
+				const writeResult = writeDshMinimalConfig(nextConfig, configPath);
+				if (!writeResult.ok) {
+					ctx.ui.notify(`Failed to save dsh settings: ${writeResult.error}`, "error");
+					return;
+				}
+				state.config = nextConfig;
+				ctx.ui.notify(`dsh: request dump ${head === "dump on" ? "on" : "off"}`, "info");
 				return;
 			}
 			if (head === "status" || head === "") {

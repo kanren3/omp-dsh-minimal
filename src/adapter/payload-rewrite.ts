@@ -64,15 +64,40 @@ function rewriteInstructionContent(content: unknown, persona: string): unknown {
 	return persona;
 }
 
-/** Rewrite the first system/developer message content in place. */
-function rewriteMessages(messages: unknown, persona: string): void {
+/**
+ * Rewrite the leading run of system/developer messages. Bootstrap replaces
+ * the whole run with a single persona message (omp emits the harness persona
+ * and a separate PROJECT/MCP-routes block as distinct system turns). Promoted
+ * reanchors only the first message; system turns after a non-system message
+ * (host mid-conversation injections) are left intact in both modes.
+ */
+function rewriteMessages(messages: unknown, options: RewriteOptions): void {
 	if (!Array.isArray(messages)) return;
-	for (const message of messages) {
+	let sawNonSystem = false;
+	let replacedFirst = false;
+	for (let index = 0; index < messages.length; index++) {
+		const message = messages[index];
 		if (!isObject(message)) continue;
 		const role = message.role;
-		if (role !== "system" && role !== "developer") continue;
-		message.content = rewriteInstructionContent(message.content, persona);
-		return;
+		if (role !== "system" && role !== "developer") {
+			sawNonSystem = true;
+			continue;
+		}
+		if (sawNonSystem) continue;
+		if (options.rewriteTools) {
+			// Bootstrap: keep one persona message, drop the rest of the run.
+			if (!replacedFirst) {
+				message.content = rewriteInstructionContent(message.content, options.persona);
+				replacedFirst = true;
+			} else {
+				messages.splice(index, 1);
+				index--;
+			}
+		} else if (!replacedFirst) {
+			// Promoted: reanchor the first system/developer message only.
+			message.content = rewriteInstructionContent(message.content, options.persona);
+			replacedFirst = true;
+		}
 	}
 }
 
@@ -156,7 +181,7 @@ export function rewriteProviderRequest(payload: unknown, options: RewriteOptions
 		payload.instructions = options.persona;
 	}
 	if ("messages" in payload) {
-		rewriteMessages(payload.messages, options.persona);
+		rewriteMessages(payload.messages, options);
 	}
 	if (options.rewriteTools) {
 		payload.tools = rewriteTools(payload.tools);
@@ -177,6 +202,10 @@ function messageText(content: unknown): string {
 		.join("");
 }
 
+/**
+ * Summarise a provider payload into the fields dsh-minimal reasons about:
+ * the joined system/instructions text, tool names, and the last user turn.
+ */
 export function extractRequestSurface(payload: unknown): {
 	system?: string;
 	toolNames: string[];
@@ -189,10 +218,17 @@ export function extractRequestSurface(payload: unknown): {
 	if (typeof payload.system === "string") system = payload.system;
 	else if (typeof payload.instructions === "string") system = payload.instructions;
 	if (system === undefined && Array.isArray(payload.messages)) {
-		const first = payload.messages.find(
-			(message) => isObject(message) && (message.role === "system" || message.role === "developer"),
-		);
-		if (isObject(first) && typeof first.content === "string") system = first.content;
+		// Only the first leading system/developer message: promoted rewrites
+		// just that one, so folding later turns of the run into the surface
+		// would duplicate them on the wire. Mid-conversation system turns
+		// (host injections) are not part of the harness persona.
+		for (const message of payload.messages) {
+			if (!isObject(message)) continue;
+			const role = message.role;
+			if (role !== "system" && role !== "developer") break;
+			system = messageText(message.content);
+			break;
+		}
 	}
 	let lastUser: string | undefined;
 	if (Array.isArray(payload.messages)) {
