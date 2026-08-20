@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { isAdapterActive, syncSurface } from "./adapter/activation.ts";
 import { readDshMinimalConfig } from "./adapter/config.ts";
-import { filterBootstrapPreludes } from "./adapter/context-filter.ts";
+import { filterBootstrapPreludes, relocateDeferredPreludes } from "./adapter/context-filter.ts";
 import { dumpRequest } from "./adapter/log.ts";
 import {
 	applyDeferredToolChoice,
@@ -31,6 +31,7 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		hasAssistant: false,
 		hasTool: false,
 		deferredToolChoice: undefined,
+		deferredPreludes: undefined,
 		lastBoundaryIndex: -1,
 	};
 
@@ -44,23 +45,25 @@ export default function dshMinimal(pi: ExtensionAPI): void {
 		state.hasAssistant = false;
 		state.hasTool = false;
 		state.deferredToolChoice = undefined;
+		state.deferredPreludes = undefined;
 		state.lastBoundaryIndex = -1;
 		refresh(pi, ctx, state);
 	});
 
-// /new, /resume, /fork, and session switches fire session_switch (not
-// session_start). Reset unconditionally; resyncSessionState restores
-// anchored from the new session's entries when a marker persists.
-pi.on("session_switch", async (_event, ctx) => {
-	state.anchored = false;
-	state.config = readDshMinimalConfig();
-	state.surface = "off";
-	state.hasAssistant = false;
-	state.hasTool = false;
-	state.deferredToolChoice = undefined;
-	state.lastBoundaryIndex = -1;
-	refresh(pi, ctx, state);
-});
+	// /new, /resume, /fork, and session switches fire session_switch (not
+	// session_start). Reset unconditionally; resyncSessionState restores
+	// anchored from the new session's entries when a marker persists.
+	pi.on("session_switch", async (_event, ctx) => {
+		state.anchored = false;
+		state.config = readDshMinimalConfig();
+		state.surface = "off";
+		state.hasAssistant = false;
+		state.hasTool = false;
+		state.deferredToolChoice = undefined;
+		state.deferredPreludes = undefined;
+		state.lastBoundaryIndex = -1;
+		refresh(pi, ctx, state);
+	});
 
 	pi.on("session_compact", async (_event, ctx) => {
 		state.hasAssistant = false;
@@ -87,13 +90,26 @@ pi.on("session_switch", async (_event, ctx) => {
 		refresh(pi, ctx, state);
 	});
 
-	// Bootstrap only: drop omp-injected custom preludes that point at tools
-	// outside the minimal catalog. The context event fires before wire
-	// encoding, so custom role and attribution are still intact.
+	// Bootstrap: drop omp-injected custom preludes that point at tools outside
+	// the minimal catalog, and stash the dropped messages. Promoted (first
+	// request only): relocate the stash from its stale turn-1 slot to the
+	// current turn's prelude slot, so the model reads the directives as this
+	// turn's — mirroring deferredToolChoice, which defers the wire-level pin.
+	// The context event fires before wire encoding, so custom role and
+	// attribution are still intact.
 	pi.on("context", async (event, ctx) => {
 		if (!isAdapterActive(ctx, state.config)) return undefined;
-		if (state.hasAssistant || state.hasTool) return undefined;
-		const messages = filterBootstrapPreludes(event.messages);
+		if (!(state.hasAssistant || state.hasTool)) {
+			state.deferredPreludes = undefined;
+			const messages = filterBootstrapPreludes(event.messages);
+			if (messages === undefined) return undefined;
+			state.deferredPreludes = event.messages.filter((message) => !messages.includes(message));
+			return { messages };
+		}
+		const deferred = state.deferredPreludes;
+		state.deferredPreludes = undefined;
+		if (deferred === undefined || deferred.length === 0) return undefined;
+		const messages = relocateDeferredPreludes(event.messages, deferred);
 		if (messages === undefined) return undefined;
 		return { messages };
 	});

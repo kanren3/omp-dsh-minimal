@@ -1,6 +1,6 @@
 {
   "name": "omp-dsh-minimal",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Minimal DeepSeek Harness anchored-standard adapter for Oh My Pi",
   "type": "module",
   "omp": {

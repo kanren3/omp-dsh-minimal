@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent";
 import type { DshMinimalConfig } from "./config.ts";
 import { latestBoundaryIndex, scanSessionPhase } from "./promotion.ts";
@@ -20,6 +21,12 @@ export interface AdapterState {
 	hasTool: boolean;
 	/** Pin dropped from the bootstrap request, applied on the first promoted request. */
 	deferredToolChoice?: unknown;
+	/**
+	 * Custom preludes filtered from the bootstrap request, relocated to the
+	 * current turn on the first promoted request so the model reads them as
+	 * this turn's directives instead of a past turn's.
+	 */
+	deferredPreludes?: AgentMessage[];
 	/** Index of the newest compaction/reset boundary already folded into the promotion flags. */
 	lastBoundaryIndex: number;
 }
